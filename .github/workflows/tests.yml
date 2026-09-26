@@ -1,0 +1,18 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Yosys (YoWASP)
+        run: pip install yowasp-yosys
+      - name: Run every test
+        run: SKIP_SYNTH=1 bash scripts/run.sh
