@@ -1,4 +1,12 @@
-name: tests
+# =============================================================================
+# Project: ProEm - Open Source Protocol Emulator
+# File: .github/workflows/sim.yaml
+# Type: Workflow: full pin-level test suite (CXXRTL)
+# Author: Paul Vincent Bezzina
+# Description:
+# =============================================================================
+
+name: sim
 
 on:
   push:
