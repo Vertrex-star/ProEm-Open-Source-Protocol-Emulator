@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 LIBERTY=${LIBERTY:?set LIBERTY to an IHP SG13G2 .lib file, e.g. sg13g2_stdcell_slow_1p08V_125C.lib}
 PERIOD_PS=${PERIOD_PS:-20000}
 YOSYS=${YOSYS:-$(command -v yosys || command -v yowasp-yosys)}
-RTL=$(grep -v '^//' rtl/files.f | tr '\n' ' ')
+RTL=$(grep -v '^//' src/files.f | tr '\n' ' ')
 TOP=${TOP:-protocol_emulator}
 mkdir -p build
 printf 'strash\ndch -f\nmap -D %s\ntopo\nbuffer -p\nupsize\ndnsize\nstime -p\n' "$PERIOD_PS" > build/sta.abc

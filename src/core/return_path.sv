@@ -1,9 +1,9 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/core/return_path.sv
+// File: src/core/return_path.sv
 // Module: return_path
 // Type: RTL, core
-// Hierarchy: protocol_emulator > return_path
+// Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > return_path
 // Submodules: uart_tx
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog

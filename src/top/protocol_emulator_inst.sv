@@ -1,6 +1,6 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/top/protocol_emulator_inst.sv
+// File: src/top/protocol_emulator_inst.sv
 // Module: protocol_emulator_inst
 // Type: Instantiation template (not part of the design)
 // Hierarchy: protocol_emulator_inst > protocol_emulator

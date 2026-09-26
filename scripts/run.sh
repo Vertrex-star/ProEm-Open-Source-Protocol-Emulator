@@ -9,7 +9,7 @@
 # =============================================================================
 set -e
 cd "$(dirname "$0")/.."
-RTL=$(grep -v '^//' rtl/files.f | tr '\n' ' ')
+RTL=$(grep -v '^//' src/files.f | tr '\n' ' ')
 YOSYS=${YOSYS:-$(command -v yosys || command -v yowasp-yosys)}
 SIMYOSYS=${SIMYOSYS:-$(command -v yowasp-yosys || echo $YOSYS)}
 RT=${CXXRTL_RUNTIME:-$(python3 -c "import yowasp_yosys,os;print(os.path.join(os.path.dirname(yowasp_yosys.__file__),'share/include/backends/cxxrtl/runtime'))" 2>/dev/null || echo "$($YOSYS-config --datdir)/include/backends/cxxrtl/runtime")}

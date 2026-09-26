@@ -2,7 +2,7 @@
 // Project: ProEm - Open Source Protocol Emulator
 // File: sim/t_ethernet.cpp
 // Type: Test, pin level (CXXRTL)
-// Device under test: protocol_emulator (rtl/top/protocol_emulator.sv)
+// Device under test: protocol_emulator (src/top/protocol_emulator.sv)
 // Author: Paul Vincent Bezzina
 // Language: C++14
 // Description:

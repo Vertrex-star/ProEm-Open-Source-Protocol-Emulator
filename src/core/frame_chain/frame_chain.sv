@@ -1,9 +1,9 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/core/frame_chain/frame_chain.sv
+// File: src/core/frame_chain/frame_chain.sv
 // Module: frame_chain
 // Type: RTL, core (frame chain)
-// Hierarchy: protocol_emulator > emulator_channel > frame_chain
+// Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > emulator_channel > frame_chain
 // Submodules: first_counter, header_counter (x6), start_router, main_counter, end_counter, watchdog, frame_buffer
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog

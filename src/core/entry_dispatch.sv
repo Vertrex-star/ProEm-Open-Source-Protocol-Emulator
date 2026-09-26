@@ -1,9 +1,9 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/core/entry_dispatch.sv
+// File: src/core/entry_dispatch.sv
 // Module: entry_dispatch
 // Type: RTL, core
-// Hierarchy: protocol_emulator > emulator_channel > entry_dispatch
+// Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > emulator_channel > entry_dispatch
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog

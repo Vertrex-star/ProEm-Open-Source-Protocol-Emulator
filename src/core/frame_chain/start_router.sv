@@ -1,9 +1,9 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/core/frame_chain/start_router.sv
+// File: src/core/frame_chain/start_router.sv
 // Module: start_router
 // Type: RTL, core (frame chain)
-// Hierarchy: protocol_emulator > emulator_channel > frame_chain > start_router
+// Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > emulator_channel > frame_chain > start_router
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog

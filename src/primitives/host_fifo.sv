@@ -1,9 +1,9 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/primitives/host_fifo.sv
+// File: src/primitives/host_fifo.sv
 // Module: host_fifo
 // Type: Primitive
-// Hierarchy: protocol_emulator > emulator_channel > host_fifo
+// Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > emulator_channel > host_fifo
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog

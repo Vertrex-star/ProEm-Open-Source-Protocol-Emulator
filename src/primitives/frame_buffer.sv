@@ -1,9 +1,9 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/primitives/frame_buffer.sv
+// File: src/primitives/frame_buffer.sv
 // Module: frame_buffer
 // Type: Primitive
-// Hierarchy: protocol_emulator > emulator_channel > frame_chain > frame_buffer
+// Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > emulator_channel > frame_chain > frame_buffer
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog

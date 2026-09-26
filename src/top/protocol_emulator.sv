@@ -1,9 +1,9 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/top/protocol_emulator.sv
+// File: src/top/protocol_emulator.sv
 // Module: protocol_emulator
-// Type: Top level
-// Hierarchy: protocol_emulator
+// Type: Top level (chip core)
+// Hierarchy: tt_um_vertrex_star_proem > protocol_emulator
 // Submodules: uart_rx, control_unit, emulator_channel (x2), return_path
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog

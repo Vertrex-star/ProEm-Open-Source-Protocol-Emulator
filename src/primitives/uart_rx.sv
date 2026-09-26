@@ -1,9 +1,9 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/primitives/uart_rx.sv
+// File: src/primitives/uart_rx.sv
 // Module: uart_rx
 // Type: Primitive
-// Hierarchy: protocol_emulator > uart_rx
+// Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > uart_rx
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog

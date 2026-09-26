@@ -1,9 +1,9 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/core/emulator_channel.sv
+// File: src/core/emulator_channel.sv
 // Module: emulator_channel
 // Type: RTL, core
-// Hierarchy: protocol_emulator > emulator_channel
+// Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > emulator_channel
 // Submodules: host_fifo, line_codec, frame_chain, entry_dispatch
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog

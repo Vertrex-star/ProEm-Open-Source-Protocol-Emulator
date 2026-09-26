@@ -1,9 +1,9 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/core/line_codec.sv
+// File: src/core/line_codec.sv
 // Module: line_codec
 // Type: RTL, core
-// Hierarchy: protocol_emulator > emulator_channel > line_codec
+// Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > emulator_channel > line_codec
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog

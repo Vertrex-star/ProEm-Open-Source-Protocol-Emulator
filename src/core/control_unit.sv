@@ -1,9 +1,9 @@
 // =============================================================================
 // Project: ProEm - Open Source Protocol Emulator
-// File: rtl/core/control_unit.sv
+// File: src/core/control_unit.sv
 // Module: control_unit
 // Type: RTL, core
-// Hierarchy: protocol_emulator > control_unit
+// Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > control_unit
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
