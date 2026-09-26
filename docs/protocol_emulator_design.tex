@@ -42,14 +42,14 @@
 \begin{center}
 \begin{tabular}{@{}ll@{}}
 \toprule
-Process & IHP SG13G2 130\,nm, through Tiny Tapeout (6 $\times$ 4 tiles) \\
+Process & IHP SG13G2 130\,nm, through Tiny Tapeout (6 $\times$ 2 tiles) \\
 System clock & 50\,MHz (60\,MHz for 10BASE-T transmit) \\
 Channels & 2 independent protocol channels, A and B \\
 Host link & UART in (auto-baud), UART out (rate set by \sig{LINK}) \\
 Standards verified & UART, SPI (controller and target), I\textsuperscript{2}C (controller), PS/2, \\
  & 10BASE-T receive, Manchester transmit, USB low speed receive and transmit \\
-Logic & 12,031 standard cells ($\approx$ 50\,\% of the tile budget) \\
-Timing & 6.6\,ns worst path at 1.08\,V, 125\,$^\circ$C (20\,ns budget at 50\,MHz) \\
+Logic & 13,144 cells after synthesis, 17,135 after place and route (72\,\% utilisation) \\
+Timing & closed after routing: 14.1\,ns worst path at 1.08\,V, 125\,$^\circ$C (20\,ns budget) \\
 Instruction set & ISA v0.4 (separate document: \emph{ProEm Instruction Set}) \\
 \bottomrule
 \end{tabular}
@@ -330,6 +330,8 @@ Test & What it checks & Result \\
 \end{tabularx}
 \end{center}
 
+\paragraph{Tiny Tapeout test.} \sig{test/test.py} (cocotb, Icarus Verilog) drives the Tiny Tapeout top level through its pads: auto-baud and the \sig{cmd\_error} event; a UART loopback from channel B's data pad into channel A; and an SPI loopback in which channel A generates SCK and MOSI on its pads and channel B samples them back, gated by channel A's chip select. It passes on the RTL and is run on the gate-level netlist by the \sig{gds} workflow.
+
 \paragraph{Bugs found by these tests and fixed.}
 \begin{itemize}
 \item The frame buffer's full check compared a 32-bit difference; after the pointers wrapped it never saw ``full'' and overwrote unread entries.
@@ -342,6 +344,8 @@ Test & What it checks & Result \\
 \paragraph{Lint.} Verilator reports no errors; the remaining warnings are intentional width extensions. There are no combinational loops (Yosys \sig{check -assert}).
 
 \section{Implementation results}
+
+\subsection{Synthesis estimate}
 
 Yosys and ABC with the IHP SG13G2 liberty files, before place and route.
 
@@ -374,7 +378,68 @@ Slow, 1.08\,V, 125\,$^\circ$C & 6.6\,ns & 20\,ns \\
 \end{tabular}
 \end{center}
 
-The worst path is inside MAIN: bit counter, length compare, \sig{complete}, and the reset of the other blocks. The line codec's worst path is 3.4\,ns at the slow corner. Figures move by a few cells from run to run with the order the files are read in. Allowing for clock-to-Q, setup and wiring after placement, there is roughly a factor of two in hand. The Tiny Tapeout flow's post-route STA is the sign-off check.
+The worst path is inside MAIN: bit counter, length compare, \sig{complete}, and the reset of the other blocks. The line codec's worst path is 3.4\,ns at the slow corner. Figures move by a few cells from run to run with the order the files are read in. Allowing for clock-to-Q, setup and wiring after placement, there is roughly a factor of two in hand. The post-route figures below replace this estimate.
+
+\subsection{Place and route on Tiny Tapeout}
+
+The design was hardened with the flow the Tiny Tapeout \sig{gds} workflow runs: LibreLane 3.0.5, the IHP PDK at the commit the shuttle pins, and the default \sig{src/config.json} (target density 60\,\%, 20\,ns clock). Timing is from the routed design with extracted parasitics.
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Tiles & 6 $\times$ 2, 1289.28 $\times$ 313.74\,$\mu$m \\
+Cells & 13,144 after synthesis; 17,135 after place and route, not counting fill \\
+ & (2,868 hold buffers, 257 clock tree cells, repair buffers) \\
+Utilisation & 72\,\% of the core area \\
+Routing & 0 violations after detailed routing, 0 antenna violations \\
+Sign-off & Magic DRC and IHP KLayout DRC clean, LVS clean \\
+ & Tiny Tapeout precheck passed \\
+Wire length & 632\,mm \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Corner & Setup slack at 50\,MHz & Hold slack & Maximum clock \\
+\midrule
+Typical, 1.2\,V, 25\,$^\circ$C & 11.0\,ns & 0.31\,ns & 111\,MHz \\
+Slow, 1.08\,V, 125\,$^\circ$C & 5.9\,ns & 0.63\,ns & 71\,MHz \\
+Fast, 1.32\,V, $-40\,^\circ$C & 13.0\,ns & 0.12\,ns & 167\,MHz \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Six by two tiles is the smallest size that fits: 4 $\times$ 2 tiles give 268,000\,$\mu$m$^2$, less than the cell area alone. The worst path after routing runs from MAIN's bit counter through a hold buffer to the frame logic. The run on GitHub is the one used for submission.
+
+\begin{center}
+\includegraphics[width=\linewidth]{layout_full.png}\\[2pt]
+{\small Routed layout, 6 $\times$ 2 tiles.}
+\end{center}
+
+\subsection{Pin map}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}llX@{}}
+\toprule
+Pin & Direction & Use \\
+\midrule
+\sig{ui[0]} & in & RX: instructions from the host (first byte \sig{0x55}) \\
+\sig{uo[0]} & out & TX: data and status to the host \\
+\sig{uo[1]} & out & BAUD\_LOCKED \\
+\sig{uo[2]}, \sig{uo[3]} & out & ARMED for channels A and B \\
+\sig{uo[4]}, \sig{uo[5]} & out & HOST\_FULL for channels A and B \\
+\sig{uo[6]}, \sig{uo[7]} & out & SELECT (chip select) for channels A and B \\
+\sig{uio[0]}--\sig{uio[2]} & in/out & pins 0--2, driven by channel A: data, pair, clock \\
+\sig{uio[3]}--\sig{uio[5]} & in/out & pins 3--5, driven by channel B: data, pair, clock \\
+\sig{uio[6]}, \sig{uio[7]} & in & pins 6 and 7 \\
+\sig{ui[7:1]} & in & unused \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+The \sig{PIN} fields count the \sig{uio} pads. Every pad is read back through \sig{pin\_in}, so open-drain I\textsuperscript{2}C and the USB pair work on single pads; a channel drives its pads only when \sig{OUT} enables them.
 
 \section{Limits and future work}
 
@@ -385,7 +450,6 @@ The worst path is inside MAIN: bit counter, length compare, \sig{complete}, and 
 \item \textbf{Manchester limits.} Receive needs at least 5 clocks per bit (50\,MHz for 10BASE-T); transmit needs an even divider (40 or 60\,MHz).
 \item \textbf{Not supported yet.} I\textsuperscript{2}C target mode (needs a branch on the received R/W bit and a START/STOP detector); a read header that captures any value (for the USB PID); CRC generation on chip.
 \item \textbf{Reset.} \sig{CLEAR} resets a channel through its asynchronous reset (\sig{rst\_n \&\& !clear}), driven from a control-unit flip-flop.
-\item \textbf{Tiny Tapeout wrapper} and final pin map.
 \end{enumerate}
 
 \section{Files}
@@ -395,11 +459,14 @@ The worst path is inside MAIN: bit counter, length compare, \sig{complete}, and 
 \toprule
 Folder or file & Content \\
 \midrule
-\sig{rtl/top/} & \sig{protocol\_emulator.sv} (top level) and \sig{protocol\_emulator\_inst.sv} (instantiation template) \\
-\sig{rtl/core/} & \sig{emulator\_channel}, \sig{control\_unit}, \sig{line\_codec}, \sig{entry\_dispatch}, \sig{return\_path} \\
-\sig{rtl/core/frame\_chain/} & \sig{frame\_chain} and its blocks: \sig{first\_counter}, \sig{header\_counter}, \sig{start\_router}, \sig{main\_counter}, \sig{end\_counter}, \sig{watchdog} \\
-\sig{rtl/primitives/} & Reusable building blocks: \sig{uart\_rx}, \sig{uart\_tx}, \sig{host\_fifo}, \sig{frame\_buffer} \\
-\sig{rtl/files.f} & File list in compile order, used by the scripts \\
+\sig{info.yaml} & Tiny Tapeout project file: title, tile count, source list, pin names \\
+\sig{src/top/} & \sig{tt\_um\_vertrex\_star\_proem.sv} (Tiny Tapeout top level and pin map), \sig{protocol\_emulator.sv} (chip core) and \sig{protocol\_emulator\_inst.sv} (instantiation template) \\
+\sig{src/core/} & \sig{emulator\_channel}, \sig{control\_unit}, \sig{line\_codec}, \sig{entry\_dispatch}, \sig{return\_path} \\
+\sig{src/core/frame\_chain/} & \sig{frame\_chain} and its blocks: \sig{first\_counter}, \sig{header\_counter}, \sig{start\_router}, \sig{main\_counter}, \sig{end\_counter}, \sig{watchdog} \\
+\sig{src/primitives/} & Reusable building blocks: \sig{uart\_rx}, \sig{uart\_tx}, \sig{host\_fifo}, \sig{frame\_buffer} \\
+\sig{src/files.f} & File list in compile order, used by the scripts \\
+\sig{src/config.json} & LibreLane settings for the Tiny Tapeout GDS flow \\
+\sig{test/} & cocotb test bench (\sig{tb.v}, \sig{test.py}) for the RTL and the gate-level netlist \\
 \sig{sim/} & Test bench \sig{bench.h} and the tests \sig{t\_*.cpp} \\
 \sig{scripts/} & \sig{run.sh} (every test, then synthesis), \sig{sta.sh} (timing) \\
 \sig{docs/} & This document, the ISA reference, the architecture diagram and its generator \\
@@ -407,6 +474,6 @@ Folder or file & Content \\
 \end{tabularx}
 \end{center}
 
-\sig{bash scripts/run.sh} needs Yosys and g++. Setting \sig{LIBERTY} to an IHP liberty file also reports area. Every source file starts with a header giving the file, module, type (top level, core RTL or primitive), place in the hierarchy and submodules. The RTL is SystemVerilog 2008 in the project's coding style, checked with Yosys and Verilator; it has not yet been compiled in Quartus.
+\sig{bash scripts/run.sh} needs Yosys and g++. Setting \sig{LIBERTY} to an IHP liberty file also reports area. Every source file starts with a header giving the file, module, type (top level, core RTL or primitive), place in the hierarchy and submodules. The RTL is SystemVerilog 2008 in the project's coding style, checked with Yosys, Verilator and Icarus Verilog; it has not yet been compiled in Quartus.
 
 \end{document}
