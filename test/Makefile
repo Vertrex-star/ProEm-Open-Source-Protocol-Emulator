@@ -22,6 +22,7 @@ PROJECT_SOURCES = primitives/frame_buffer.sv \
 	core/frame_chain/main_counter.sv \
 	core/frame_chain/end_counter.sv \
 	core/frame_chain/watchdog.sv \
+	core/frame_chain/branch_unit.sv \
 	core/frame_chain/frame_chain.sv \
 	core/line_codec.sv \
 	core/entry_dispatch.sv \

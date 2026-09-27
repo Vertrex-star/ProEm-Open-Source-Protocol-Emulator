@@ -30,6 +30,12 @@ class Link:
     def start(self, val, cyc, cap, wr, pin=0):
         return [self.op(1), (wr << 7) | (cap << 6) | (cyc & 15), pin & 7, val & 0xFF]
 
+    def hdr(self, n, val, cyc, cap, wr, grp=0, sr=0, any_value=0):
+        return [self.op(2, n), (wr << 7) | (cap << 6) | (grp << 4) | (cyc & 15), (sr << 7) | (any_value << 6), val & 0xFF]
+
+    def branch(self, rule, hit, miss, src, block, mask, value):
+        return [self.op(0xF, rule), (hit << 6) | (miss << 4) | (src << 3) | (block & 7), mask & 0xFF, value & 0xFF]
+
     def main(self, bits, direction, we=0, ack=0, pin=0, sr=0):
         return [self.op(3), (direction << 6) | (we << 5) | (ack << 4) | (sr << 3) | (pin & 7), (bits >> 8) & 0xFF, bits & 0xFF]
 
@@ -134,6 +140,7 @@ async def power_on(dut):
     dut.ext_in.value = 0xFF
     dut.loop_uart.value = 0
     dut.loop_select.value = 0
+    dut.i2c_bridge.value = 0
     dut.rst_n.value = 0
     await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
@@ -150,10 +157,10 @@ async def test_autobaud_and_errors(dut):
     link = await power_on(dut)
     assert (int(dut.uo_out.value) >> 1) & 1 == 1, "BAUD_LOCKED did not go high after 0x55"
     assert int(dut.uio_oe.value) == 0, "outputs must be off after reset"
-    await link.send([0xF0])
+    await link.send([0xF4, 0, 0, 0])
     await link.quiet()
     dut._log.info(f"link events {link.events}")
-    assert link.events and (link.events[0] & 2), f"reserved opcode should give cmd_error, got {link.events}"
+    assert link.events and (link.events[0] & 2), f"an invalid BRANCH rule should give cmd_error, got {link.events}"
 
 
 @cocotb.test()
@@ -194,3 +201,23 @@ async def test_spi_loopback(dut):
     assert link.got[1] == [(8, 0xA5), (8, 0x3C)], f"channel B read {link.got[1]}"
     assert link.status[0] == [1], f"channel A status {link.status[0]}"
     assert link.status[1] == [1], f"channel B status {link.status[1]}"
+
+
+@cocotb.test()
+async def test_i2c_target_loopback(dut):
+    link = await power_on(dut)
+    dut.i2c_bridge.value = 1
+    link.channel = 1
+    await link.send(link.order(1) + link.line(0, 0) + link.clock(SYNC, 0, 2, 0) + link.out(2, 0, 0, 0, 1) + link.start(0, 0, 0, 0)
+                    + link.hdr(1, 0x42, 7, 0, 0) + link.hdr(2, 0, 1, 1, 0, 0, 0, 1) + link.hdr(3, 0, 1, 0, 1)
+                    + link.branch(0, 2, 1, 0, 2, 0x01, 0x01) + link.main(64, 2, 1, 1, 0) + link.run(0))
+    link.channel = 0
+    await link.send(link.order(1) + link.line(0, 0) + link.clock(GENERATE, 60, 2, 0, 1) + link.out(2, 1, 0, 0, 1)
+                    + link.start(0x84, 8, 0, 1) + link.hdr(1, 0, 1, 0, 0) + link.main(16, 1, 0, 1)
+                    + link.data(8, 0x11) + link.data(8, 0x22) + link.run(2))
+    await ClockCycles(dut.clk, 6000)
+    await link.quiet()
+    dut._log.info(f"target read {link.got[1]}, status A {link.status[0]}, B {link.status[1]}")
+    assert link.got[1] == [(1, 0), (8, 0x11), (8, 0x22)], f"target read {link.got[1]}"
+    assert link.status[0] == [1], f"controller status {link.status[0]}"
+    assert link.status[1] == [1], f"target status {link.status[1]}"
