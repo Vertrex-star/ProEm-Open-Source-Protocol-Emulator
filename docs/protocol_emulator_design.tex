@@ -42,15 +42,16 @@
 \begin{center}
 \begin{tabular}{@{}ll@{}}
 \toprule
-Process & IHP SG13G2 130\,nm, through Tiny Tapeout (6 $\times$ 2 tiles) \\
-System clock & 50\,MHz (60\,MHz for 10BASE-T transmit) \\
+Process & IHP 130\,nm, through Tiny Tapeout (6 $\times$ 4 tiles) \\
+System clock & 50\,MHz (10BASE-T transmit needs 40 or 60\,MHz) \\
 Channels & 2 independent protocol channels, A and B \\
 Host link & UART in (auto-baud), UART out (rate set by \sig{LINK}) \\
-Standards verified & UART, SPI (controller and target), I\textsuperscript{2}C (controller), PS/2, \\
- & 10BASE-T receive, Manchester transmit, USB low speed receive and transmit \\
-Logic & 13,144 cells after synthesis, 17,135 after place and route (72\,\% utilisation) \\
-Timing & closed after routing: 14.1\,ns worst path at 1.08\,V, 125\,$^\circ$C (20\,ns budget) \\
-Instruction set & ISA v0.4 (separate document: \emph{ProEm Instruction Set}) \\
+Standards verified & UART, SPI (controller and target), I\textsuperscript{2}C (controller and target), PS/2, \\
+ & 10BASE-T receive, Manchester transmit, USB low speed receive and transmit, \\
+ & SWD-style acknowledge handling, CAN-style arbitration \\
+Logic & 15,513 cells after synthesis, 20,037 after place and route (35\,\% utilisation) \\
+Timing & closed after routing: 17.7\,ns worst path at 1.08\,V, 125\,$^\circ$C (20\,ns budget) \\
+Instruction set & ISA v0.5 (separate document: \emph{ProEm Instruction Set}) \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -64,7 +65,7 @@ ProEm is an open-source protocol emulator ASIC. The chip lets an RP2040 speak ma
 
 The design has four parts:
 \begin{enumerate}
-\item \textbf{Host side.} A UART receiver with auto-baud feeds the control unit, which decodes ISA v0.4 instructions into registered configuration writes. A return path sends received data, frame status and link events back on a second UART.
+\item \textbf{Host side.} A UART receiver with auto-baud feeds the control unit, which decodes ISA v0.5 instructions into registered configuration writes. A return path sends received data, frame status and link events back on a second UART.
 \item \textbf{Input pipeline.} Every input pin passes through two synchroniser flip-flops and one more register before any logic uses it.
 \item \textbf{Two channels.} Each channel has a host FIFO for write data, a \emph{frame chain} that runs the frame, an \emph{entry dispatcher}, and a \emph{line codec} that turns pins into bits and ticks, and bits into pin levels.
 \item \textbf{Outputs.} Each channel drives a data output, a pair output (the complement, for USB D$-$), a clock output and a select output, each with an output enable. Bidirectional pads are read back through the input pins.
@@ -122,7 +123,7 @@ The control unit reads an opcode byte \texttt{\{OP, CH, N\}}, collects 0--4 oper
 \item a host FIFO write (\sig{DATA});
 \item a register update: \sig{LINE}, \sig{CLOCK} and \sig{OUT} per channel, \sig{LINK} for the return link.
 \end{itemize}
-Every output is a register, so the configuration bus forms a pipeline stage and the decode logic is never in a channel's timing path. \sig{START} patterns are given as plain numbers; the control unit aligns them for the channel's bit order. Reserved opcodes and \sig{HDR 0}/\sig{HDR 7} raise \sig{cmd\_error}.
+Every output is a register, so the configuration bus forms a pipeline stage and the decode logic is never in a channel's timing path. \sig{START} patterns are given as plain numbers; the control unit aligns them for the channel's bit order. \sig{BRANCH} rules travel on the same bus (select 8 and 9). \sig{BRANCH} with \sig{N} $>$ 1 and \sig{HDR 0}/\sig{HDR 7} raise \sig{cmd\_error}.
 
 \subsection{Frame chain (\sig{frame\_chain})}
 
@@ -130,21 +131,24 @@ The frame chain is the frame engine: one START block, up to six header blocks an
 
 \begin{itemize}
 \item \textbf{START} slides an 8-bit window over its own pin and matches a pattern of 1--8 bits; with 0 bits it waits for a level (SPI chip select); as a write block it sends its value when \sig{RUN} starts the frame.
-\item \textbf{Headers} each compare, capture or send a 1--8 bit field. Each has a group (always, read runs, write runs) and an optional repeated START before it.
+\item \textbf{Headers} each compare, capture or send a 1--8 bit field. Each has a group (always, read runs, write runs) and an optional repeated START before it. A read header with \sig{ANY} accepts any value and keeps what arrived, in place of its compare value.
 \item \textbf{start\_router} enables the next active block after the previous one succeeds. It skips unconfigured blocks and blocks whose group is not in the current run mode.
+\item \textbf{branch\_unit} holds two \sig{BRANCH} rules. When a watched block succeeds, a rule compares its value under a mask and chooses an action: keep the mode, switch to read, switch to write, or abort. A second kind of rule fires when the codec reports that the line read back differently from what the chip drove. The decision is registered, and the chain pauses for that one clock so the next block starts in the new mode. A branch abort keeps the values captured so far and stops the codec driving at once.
 \item \textbf{MAIN} reads bits into bytes, to a count or until END; or writes host entries, splitting them at the frame's bit count and, with the ACK slot on, at byte edges. After each byte it can add one bit the other way (I\textsuperscript{2}C ACK). Its direction is fixed or follows the run mode.
 \item \textbf{END} slides a 16-bit window over one raw pin, or over the D+/D$-$ pair compare: both low (SE0) is a 1, both high (SE1) aborts with a line error. After an abort, START waits until END has matched again, so it never searches inside the rest of a rejected frame.
 \item \textbf{Watchdog} ends a frame when no bit, host entry or sent entry is seen for a set number of clocks.
-\item \textbf{Frame buffer} holds 16 entries \texttt{\{wire, length, value\}}. Written values are released at once; captured values are released when MAIN starts and dropped on abort. At the end of every frame the chain adds a \emph{status entry} (length 15) with complete, abort, timeout, line error and overflow flags.
+\item \textbf{Frame buffer} holds 16 entries \texttt{\{wire, length, value\}}. Written values are released at once; captured values are released when MAIN starts and dropped on abort. At the end of every frame the chain adds a \emph{status entry} (length 15) with complete, abort, timeout, line error, overflow, underrun, branch-matched and branch-abort flags.
 \end{itemize}
 
 Read blocks only take ticks once every bit written ahead of them has left the chip (\sig{line\_free}), so a frame can send a request and then read the reply. Write blocks wait when the buffer is almost full, so written bits are never lost; received entries that arrive with the buffer full are dropped and the frame's status has the overflow flag.
+
+\paragraph{Streaming and underrun.} A write MAIN takes host entries as they arrive, so \sig{DATA} can keep coming during the frame. With a generated clock the line simply pauses when the host FIFO is empty. On a line with fixed timing (ASYNC, RECOVER, SYNC) the chain aborts with the \emph{underrun} flag when MAIN needs data, none is waiting and every queued bit has gone out, and the codec stops driving. While a read-back \sig{BRANCH} rule is set, a write frame also stays open until its last bit has left the pin, so an arbitration loss in the last bits still reaches the frame's status.
 
 \subsection{Host FIFO and entry dispatcher}
 
 The host FIFO holds 8 \texttt{\{length, value\}} entries loaded by \sig{DATA} and feeds a write MAIN. A \sig{DATA} arriving while it is full is dropped and reported as a link event.
 
-The entry dispatcher reads the frame buffer in order. Wire entries go to the codec's encoder; host entries and status entries go to the return path. When a status entry reaches the head, every bit of that frame has already been handed to the encoder, so the dispatcher gives the encoder a \emph{frame mark} at that moment. The encoder uses it to send the I\textsuperscript{2}C STOP or the end of packet at exactly the right place.
+The entry dispatcher reads the frame buffer in order. Wire entries go to the codec's encoder; host entries and status entries go to the return path. After a cancel (branch abort, underrun, I\textsuperscript{2}C bus error) it discards the frame's remaining wire entries up to its status entry, and the chain's count of bits in flight is kept consistent. When a status entry reaches the head, every bit of that frame has already been handed to the encoder, so the dispatcher gives the encoder a \emph{frame mark} at that moment. The encoder uses it to send the I\textsuperscript{2}C STOP or the end of packet at exactly the right place.
 
 \subsection{Line codec (\sig{line\_codec})}
 
@@ -184,6 +188,10 @@ Manchester & L 2H 2L H L 2H L \\
 \caption{Three line codes from the same codec. UART: NRZ, LSB first, start and stop bits. USB low speed: NRZI on D+/D$-$ (a 0 changes the line), a stuff bit (st) after six 1s, then the end of packet. 10BASE-T: Manchester, low-to-high in the middle of the bit = 1.}
 \end{figure}
 
+\paragraph{I\textsuperscript{2}C target.} With \sig{OUT I2C} and a SYNC clock on SCL, the codec detects START and STOP (SDA falling or rising while SCL is high), which start the frame and end a MAIN that waits for END. A bit to send waits for SCL to fall before it is driven, and SDA is released after the falling edge that ends it, so the address ACK and data bytes meet the I\textsuperscript{2}C set-up and hold rules. The chip never drives SCL in this mode.
+
+\paragraph{Read-back check and cancel.} While sending, the codec compares the pad it drives (read back on \sig{LINE}'s \sig{PIN\_A}) with the level it wants, in the middle of each bit. A difference is passed to the branch unit (CAN-style arbitration). On a cancel the encoder drops its current and next entry, releases the line and counts the dropped entries as sent.
+
 \paragraph{Outputs.} \sig{DRIVE} is off after reset, push-pull while sending, open drain, or push-pull always (with an idle level, for a UART line). The pair output carries the complement. The select output is active from the frame's START until its last bit has gone out.
 
 \subsection{Return path (\sig{return\_path}, \sig{uart\_tx})}
@@ -211,7 +219,7 @@ The return path takes host entries and status entries from both channels and lin
 First byte & Second & Meaning \\
 \midrule
 \texttt{10 C 0 LLLL} & value & Host entry from channel \texttt{C}, length 0--8. Length 0 with value \texttt{02} is a NACK from a writing MAIN \\
-\texttt{10 C 0 1111} & flags & End of a frame on channel \texttt{C}: bit 0 complete, 1 abort, 2 timeout, 3 line error, 4 overflow \\
+\texttt{10 C 0 1111} & flags & End of a frame on channel \texttt{C}: bit 0 complete, 1 abort, 2 timeout, 3 line error, 4 overflow, 5 underrun, 6 branch matched, 7 branch abort \\
 \texttt{11 000000} & flags & Link events: bit 0 \sig{rx\_error}, 1 \sig{cmd\_error}, 2 \sig{DATA} dropped on A, 3 on B \\
 \bottomrule
 \end{tabularx}
@@ -234,6 +242,8 @@ void on_return_message(uint8_t head, uint8_t value) {
 \item \textbf{Receiving:} plain \sig{RUN} arms the channel; it stays armed after every frame.
 \item \textbf{Packets} (USB, Ethernet, I\textsuperscript{2}C transactions): load the data with \sig{DATA}, then \sig{RUN WRITE} or \sig{RUN READ}. The channel starts exactly one frame per \sig{RUN}.
 \item \textbf{Streams} (UART transmit): plain \sig{RUN}. The channel also starts a new frame whenever data is waiting.
+\item \textbf{Long packets}: load a few \sig{DATA} entries, send \sig{RUN WRITE}, then keep sending \sig{DATA} while the frame runs. Watch \sig{HOST\_FULL}; on a fixed-timing line keep ahead of the line or the frame ends with an underrun (status \texttt{22}).
+\item \textbf{Reacting to the other side} (I\textsuperscript{2}C target, SWD, arbitration): add \sig{BRANCH} rules; the status byte's bits 6 and 7 say which way the frame went.
 \end{itemize}
 
 \section{Protocol recipes}
@@ -308,6 +318,28 @@ CF FF   CF FF   CF 7E   CF 00   7A
 \end{lstlisting}
 
 
+\paragraph{I\textsuperscript{2}C target at address 0x42.} SDA on pin 0, SCL on pin 1. The R/W bit is captured with \sig{ANY}; the branch makes MAIN write (the controller reads) or read (the controller writes); MAIN ends at STOP or repeated START.
+\begin{lstlisting}
+61   A0 00 00   B0 01 00 00 00   D0 84   10 00 00 00   21 07 00 42
+22 41 40 00   23 81 00 00   F0 92 01 01   30 B0 00 40   70
+data for reads:   C7 5A   C7 C3
+\end{lstlisting}
+
+
+\paragraph{SWD-style read with acknowledge check.} SWCLK generated (1\,MHz), SWDIO open drain on pin 0, LSB first. Only an OK acknowledge continues to the 33-bit data phase; WAIT and FAULT abort with the acknowledge returned.
+\begin{lstlisting}
+60   A0 00 00   B0 81 00 00 19   D0 80   10 88 00 A5
+21 01 40 00   22 43 40 00   F0 72 07 01   30 00 00 21   70 (each transaction)
+\end{lstlisting}
+
+
+\paragraph{CAN-style arbitration.} 1\,Mbit/s (50 clocks per bit), open drain, read back on pin 0. A lost arbitration aborts the frame and releases the line in the same bit (status \texttt{C2}).
+\begin{lstlisting}
+61   A0 00 00   B0 40 00 00 32   D0 80   10 81 00 00   30 40 00 13   F0 C8 00 00
+C7 id[10:3]   C2 id[2:0]   C7 data   72
+\end{lstlisting}
+
+
 \section{Verification}\label{sec:verify}
 
 The test bench (\sig{sim/bench.h}) simulates the whole chip with Yosys CXXRTL. Every test does what the RP2040 would do: it resets the chip, sends \texttt{0x55}, sends instruction bytes on \sig{rx\_serial}, and decodes the return UART on \sig{tx\_serial} into host entries, frame status and link events. Protocol lines are driven or modelled at the pins every clock: open-drain buses are wired-AND, clocks are looped back through \sig{pin\_in}, and devices are behavioural models.
@@ -326,11 +358,15 @@ Test & What it checks & Result \\
 \sig{t\_manchester} & Manchester transmit at 6 and 10 clocks per bit, decoded by the other channel; end-of-frame idle and release & Pass \\
 \sig{t\_usb} & Receive with stuffing at 33.33 clocks per bit; SE1 and missing stuff bit abort with line error; transmit decoded by a model, end of packet SE0 SE0 J then released; channel B transmit looped into channel A receive & Pass \\
 \sig{t\_random} & 1,800 random programs (6 seeds $\times$ 150, both bit orders): 0--6 headers, fields of 1--8 bits, capture on and off, random data, mismatches, splits across frames & Pass \\
+\sig{t\_i2c\_target} & Chip as I\textsuperscript{2}C target at 0x42 against a controller model: write of two bytes, read of two bytes (branch to write, controller NACK), wrong address (no ACK, abort), register write then repeated START and read; SCL at 417\,kHz and 1\,MHz & Pass \\
+\sig{t\_branch} & SWD-style acknowledge: OK continues to 33 data bits, WAIT and FAULT abort with the acknowledge returned. CAN-style arbitration on an open-drain line against a node model: the chip wins, the chip loses and releases the line within the bit, and the channel is reusable afterwards & Pass \\
+\sig{t\_stream} & Underrun: 8 of 32 bits loaded on a UART line aborts with status \texttt{22}. UART stream of 12 bytes (36 entries) fed while the frame runs. SPI stream of 20 bytes with the generated clock pausing & Pass \\
+\sig{t\_random\_branch} & 600 random branch programs (3 seeds $\times$ 100, both bit orders): a capture-any header of 1--8 bits, random mask and value (half forced to match), random hit and miss actions, random base run mode, read-group and write-group headers; checks the path taken, the captures and the status byte & Pass \\
 \bottomrule
 \end{tabularx}
 \end{center}
 
-\paragraph{Tiny Tapeout test.} \sig{test/test.py} (cocotb, Icarus Verilog) drives the Tiny Tapeout top level through its pads: auto-baud and the \sig{cmd\_error} event; a UART loopback from channel B's data pad into channel A; and an SPI loopback in which channel A generates SCK and MOSI on its pads and channel B samples them back, gated by channel A's chip select. It passes on the RTL and is run on the gate-level netlist by the \sig{gds} workflow.
+\paragraph{Tiny Tapeout test.} \sig{test/test.py} (cocotb, Icarus Verilog) drives the Tiny Tapeout top level through its pads: auto-baud and the \sig{cmd\_error} event; a UART loopback from channel B's data pad into channel A; an SPI loopback in which channel A generates SCK and MOSI on its pads and channel B samples them back, gated by channel A's chip select; and an I\textsuperscript{2}C loopback in which channel A is the controller and channel B the target at 0x42 on the same open-drain wire. It passes on the RTL and is run on the gate-level netlist by the \sig{gds} workflow.
 
 \paragraph{Bugs found by these tests and fixed.}
 \begin{itemize}
@@ -339,6 +375,8 @@ Test & What it checks & Result \\
 \item Chip select glitched between a write frame completing and its last bits reaching the codec.
 \item STOP and the end of packet waited for the return link; they now follow the frame mark.
 \item Outputs drove low after reset; they are now off until \sig{OUT} is given.
+\item A write frame finishes as soon as its last bits are queued, before they leave the pin, so a read-back rule had no frame left to act on (found by the CAN-style test). Write frames now stay open until the line drains while such a rule is set.
+\item Timing: the first branch design fed the new mode straight into MAIN in the same clock, adding about 5\,ns to the worst path. The decision is now registered and the chain pauses for one clock.
 \end{itemize}
 
 \paragraph{Lint.} Verilator reports no errors; the remaining warnings are intentional width extensions. There are no combinational loops (Yosys \sig{check -assert}).
@@ -347,54 +385,43 @@ Test & What it checks & Result \\
 
 \subsection{Synthesis estimate}
 
-Yosys and ABC with the IHP SG13G2 liberty files, before place and route.
+Yosys and ABC with the IHP SG13G2 liberty files, before place and route. The branch unit, capture-any headers, streaming and I\textsuperscript{2}C target support added about 2,300 cells.
 
 \begin{center}
 \begin{tabular}{@{}lrr@{}}
 \toprule
 Block & Cells & Area, typical ($\mu$m$^2$) \\
 \midrule
-Frame chain & 3,974 & 73,000 \\
-Line codec & 1,114 & 14,400 \\
+Frame chain & 4,930 & 83,400 \\
+\quad of which branch unit (two rules) & 368 & 6,000 \\
+Line codec & 1,223 & 15,800 \\
 Host FIFO (8 entries) & 284 & 8,400 \\
-One channel (chain, codec, host FIFO, dispatcher) & 5,388 & 96,100 \\
-Control unit & 910 & 19,800 \\
+One channel (chain, codec, host FIFO, dispatcher) & 6,390 & 107,400 \\
+Control unit & 972 & 20,300 \\
 UART receiver with auto-baud & 442 & 7,700 \\
 Return path with UART transmitter & 317 & 5,300 \\
 \midrule
-\textbf{Whole design (flattened)} & \textbf{12,031} & \textbf{219,500} \\
+\textbf{Whole design (flattened)} & \textbf{14,301} & \textbf{247,500} \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\begin{center}
-\begin{tabular}{@{}lll@{}}
-\toprule
-Corner & Worst register-to-register path & Budget at 50\,MHz \\
-\midrule
-Typical, 1.2\,V, 25\,$^\circ$C & 4.1\,ns & 20\,ns \\
-Slow, 1.08\,V, 125\,$^\circ$C & 6.6\,ns & 20\,ns \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-The worst path is inside MAIN: bit counter, length compare, \sig{complete}, and the reset of the other blocks. The line codec's worst path is 3.4\,ns at the slow corner. Figures move by a few cells from run to run with the order the files are read in. Allowing for clock-to-Q, setup and wiring after placement, there is roughly a factor of two in hand. The post-route figures below replace this estimate.
+The worst path before layout runs inside MAIN: bit counter, length compare, frame completion, and the write into the frame buffer. An earlier version of the branch unit lengthened it by about 5\,ns by feeding the new mode straight into MAIN; registering the decision brought it back to within 1\,ns of the design without branches. The post-route figures below are the ones that count.
 
 \subsection{Place and route on Tiny Tapeout}
 
-The design was hardened with the flow the Tiny Tapeout \sig{gds} workflow runs: LibreLane 3.0.5, the IHP PDK at the commit the shuttle pins, and the default \sig{src/config.json} (target density 60\,\%, 20\,ns clock). Timing is from the routed design with extracted parasitics.
+The design was hardened with the flow the Tiny Tapeout \sig{gds} workflow runs: LibreLane 3.0.5, the IHP SG13G2 PDK at the commit the shuttle pins, and the default \sig{src/config.json} (target density 60\,\%, 20\,ns clock), at the 6 $\times$ 4 tiles the Jane Street challenge sets. Timing is from the routed design with extracted parasitics. The CMOS5L build for the challenge will follow once Jane Street release their template.
 
 \begin{center}
 \begin{tabular}{@{}ll@{}}
 \toprule
-Tiles & 6 $\times$ 2, 1289.28 $\times$ 313.74\,$\mu$m \\
-Cells & 13,144 after synthesis; 17,135 after place and route, not counting fill \\
- & (2,868 hold buffers, 257 clock tree cells, repair buffers) \\
-Utilisation & 72\,\% of the core area \\
+Tiles & 6 $\times$ 4, 1289.28 $\times$ 710.64\,$\mu$m \\
+Cells & 15,513 after synthesis; 20,037 after place and route, not counting fill \\
+ & (3,059 hold buffers, 301 clock tree cells, repair buffers) \\
+Utilisation & 35\,\% of the core area \\
 Routing & 0 violations after detailed routing, 0 antenna violations \\
-Sign-off & Magic DRC and IHP KLayout DRC clean, LVS clean \\
- & Tiny Tapeout precheck passed \\
-Wire length & 632\,mm \\
+Sign-off & Magic DRC and KLayout IHP DRC 0 errors; LVS clean; Tiny Tapeout precheck passed \\
+Wire length & 763\,mm \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -404,18 +431,18 @@ Wire length & 632\,mm \\
 \toprule
 Corner & Setup slack at 50\,MHz & Hold slack & Maximum clock \\
 \midrule
-Typical, 1.2\,V, 25\,$^\circ$C & 11.0\,ns & 0.31\,ns & 111\,MHz \\
-Slow, 1.08\,V, 125\,$^\circ$C & 5.9\,ns & 0.63\,ns & 71\,MHz \\
-Fast, 1.32\,V, $-40\,^\circ$C & 13.0\,ns & 0.12\,ns & 167\,MHz \\
+Typical, 1.2\,V, 25\,$^\circ$C & 8.8\,ns & 0.31\,ns & 89\,MHz \\
+Slow, 1.08\,V, 125\,$^\circ$C & 2.3\,ns & 0.64\,ns & 57\,MHz \\
+Fast, 1.32\,V, $-40\,^\circ$C & 12.7\,ns & 0.12\,ns & 136\,MHz \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Six by two tiles is the smallest size that fits: 4 $\times$ 2 tiles give 268,000\,$\mu$m$^2$, less than the cell area alone. The worst path after routing runs from MAIN's bit counter through a hold buffer to the frame logic. The run on GitHub is the one used for submission.
+The worst path after routing starts at the frame buffer's read pointer. The margin is smaller than in the 6 $\times$ 2 build before the branch unit (5.9\,ns), mostly because the larger die spreads the cells and lengthens the wires; the slow corner also shows 9 slew warnings, each within 0.08\,ns of the 2.5\,ns limit, which the flow reports but does not treat as errors. A build with 75\,\% placement density improved the pre-route slack by 0.8\,ns but was much harder to route, so the default setting is kept. 60\,MHz for 10BASE-T transmit now meets timing at the typical corner only. The run on GitHub is the one used for submission.
 
 \begin{center}
 \includegraphics[width=\linewidth]{layout_full.png}\\[2pt]
-{\small Routed layout, 6 $\times$ 2 tiles.}
+{\small Routed layout, 6 $\times$ 4 tiles. The logic fills the upper part; the lower third is filler, room for future additions.}
 \end{center}
 
 \subsection{Pin map}
@@ -445,10 +472,11 @@ The \sig{PIN} fields count the \sig{uio} pads. Every pad is read back through \s
 
 \begin{enumerate}
 \item \textbf{Return link bandwidth.} Two bytes per host entry. At 4 clocks per bit the link keeps up with USB low speed and the clocked standards. Full-size 10BASE-T frames (64 bytes and more) arrive faster; they are received but overflow the 16-entry buffer and are reported with the overflow flag.
-\item \textbf{Transmit packet size.} The host FIFO holds 8 entries and the instruction link is slow, so a transmitted packet is what the write blocks hold plus 8 \sig{DATA} entries (about 14 bytes).
+\item \textbf{Feeding fixed-timing lines.} \sig{DATA} streams during a frame, so packet length is no longer limited by the 8-entry host FIFO, but each entry costs 140 clocks on the instruction link at 7 clocks per bit. UART transmit keeps up to about 1.2\,Mbaud; faster fixed-timing lines must be preloaded (8 entries) or end with an underrun.
 \item \textbf{Head-of-line blocking.} A host entry waiting for the return link holds up the wire entries behind it. I\textsuperscript{2}C just stretches SCL; a timed transmit would pause.
-\item \textbf{Manchester limits.} Receive needs at least 5 clocks per bit (50\,MHz for 10BASE-T); transmit needs an even divider (40 or 60\,MHz).
-\item \textbf{Not supported yet.} I\textsuperscript{2}C target mode (needs a branch on the received R/W bit and a START/STOP detector); a read header that captures any value (for the USB PID); CRC generation on chip.
+\item \textbf{Manchester limits.} Receive needs at least 5 clocks per bit (50\,MHz for 10BASE-T); transmit needs an even divider (40 or 60\,MHz), and 60\,MHz meets timing only at the typical corner in the current layout.
+\item \textbf{Not supported yet.} CRC generation on chip; clock stretching as an I\textsuperscript{2}C target; CAN bit stuffing is in the codec but untested; a \emph{loop} action for \sig{BRANCH} (repeat a block without the host).
+\item \textbf{I\textsuperscript{2}C target speed.} Tested up to 1\,MHz SCL. Faster, the ACK after a repeated START can be late, because the previous frame's status entry must first reach the return link (head-of-line blocking).
 \item \textbf{Reset.} \sig{CLEAR} resets a channel through its asynchronous reset (\sig{rst\_n \&\& !clear}), driven from a control-unit flip-flop.
 \end{enumerate}
 
@@ -462,7 +490,7 @@ Folder or file & Content \\
 \sig{info.yaml} & Tiny Tapeout project file: title, tile count, source list, pin names \\
 \sig{src/top/} & \sig{tt\_um\_vertrex\_star\_proem.sv} (Tiny Tapeout top level and pin map), \sig{protocol\_emulator.sv} (chip core) and \sig{protocol\_emulator\_inst.sv} (instantiation template) \\
 \sig{src/core/} & \sig{emulator\_channel}, \sig{control\_unit}, \sig{line\_codec}, \sig{entry\_dispatch}, \sig{return\_path} \\
-\sig{src/core/frame\_chain/} & \sig{frame\_chain} and its blocks: \sig{first\_counter}, \sig{header\_counter}, \sig{start\_router}, \sig{main\_counter}, \sig{end\_counter}, \sig{watchdog} \\
+\sig{src/core/frame\_chain/} & \sig{frame\_chain} and its blocks: \sig{first\_counter}, \sig{header\_counter}, \sig{start\_router}, \sig{branch\_unit}, \sig{main\_counter}, \sig{end\_counter}, \sig{watchdog} \\
 \sig{src/primitives/} & Reusable building blocks: \sig{uart\_rx}, \sig{uart\_tx}, \sig{host\_fifo}, \sig{frame\_buffer} \\
 \sig{src/files.f} & File list in compile order, used by the scripts \\
 \sig{src/config.json} & LibreLane settings for the Tiny Tapeout GDS flow \\

@@ -4,7 +4,7 @@ ProEm is an open-source protocol emulator ASIC: a chip that lets an RP2040 speak
 hardware. The RP2040 describes a frame in a few instruction bytes; the chip runs it at up to one
 bit per clock, with exact timing, and sends back what it received plus a status for every frame.
 
-Target: IHP SG13G2 130 nm through [Tiny Tapeout](https://tinytapeout.com) (6 × 2 tiles), 50 MHz.
+Target: IHP 130 nm through [Tiny Tapeout](https://tinytapeout.com) (6 × 4 tiles, as the Jane Street challenge sets), 50 MHz.
 Top module for Tiny Tapeout: `tt_um_vertrex_star_proem`.
 Built for the [Jane Street protocol emulator ASIC competition](https://blog.janestreet.com/protocol-emulator-asic-competition/).
 
@@ -16,10 +16,12 @@ Built for the [Jane Street protocol emulator ASIC competition](https://blog.jane
 | --- | --- |
 | Channels | 2 independent channels, A and B, running at the same time |
 | Host link | UART in with auto-baud, UART out at a rate set by `LINK` (down to 4 clocks per bit) |
-| Verified at pin level | UART, SPI (controller and target), I2C controller, PS/2, 10BASE-T receive, Manchester transmit, USB low speed receive and transmit |
-| Logic | 13,144 cells after synthesis, 17,135 after place and route (72 % of the 6 × 2 core area) |
-| Timing | Closed after routing at all three corners: 14.1 ns worst path at 1.08 V, 125 °C (20 ns budget) |
-| Instruction set | ISA v0.4, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
+| Verified at pin level | UART, SPI (controller and target), I2C controller and target, PS/2, 10BASE-T receive, Manchester transmit, USB low speed receive and transmit, SWD-style acknowledge handling, CAN-style arbitration |
+| Reacting on chip | `BRANCH` rules change a frame's direction, or abort it, from a field just received or from the line not reading back what the chip drove |
+| Long packets | `DATA` streams while a frame runs; fixed-timing lines report an underrun if the data runs out |
+| Logic | 15,513 cells after synthesis, 20,037 after place and route (35 % of the 6 × 4 core area) |
+| Timing | Closed after routing at all three corners: 17.7 ns worst path at 1.08 V, 125 °C (20 ns budget) |
+| Instruction set | ISA v0.5, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
 
 ## How it works
 
@@ -28,12 +30,15 @@ Built for the [Jane Street protocol emulator ASIC competition](https://blog.jane
   per frame and link events back on a second UART.
 * **Input pipeline.** Every input pin passes through two synchroniser flops and one register.
 * **Two channels.** Each has a host FIFO for write data, a *frame chain* (START, up to six headers,
-  MAIN, END, watchdog, frame buffer), an entry dispatcher, and a *line codec*:
+  MAIN, END, watchdog, frame buffer, and a *branch unit* with two rules), an entry dispatcher, and a
+  *line codec*:
   * tick source: SYNC (clock pin edge), ASYNC / RECOVER (bit timer that re-centres on edges),
     GENERATE (drives SCK / SCL, with clock stretching);
   * decoder: NRZ, NRZI, NRZI on the USB pair, Manchester, bit unstuffing;
   * encoder: the same codes, stuff insertion, I2C START / Sr / STOP, USB end of packet,
-    open drain, chip select.
+    open drain, chip select;
+  * I2C target support: START / STOP detection and SDA timing against an external SCL;
+  * read-back check of the driven pad, for arbitration.
 
 The [design reference](docs/protocol_emulator_design.pdf) explains every block and gives the exact
 instruction bytes for each standard.
@@ -116,22 +121,24 @@ lines (I2C, USB) work on a single pad. A channel only drives its pads when `OUT`
 The GDS file, pictures of the layout and a summary of space, power, performance and the Jane Street
 challenge are in [gds/](gds/README.md).
 
-Hardened locally with the same flow the `gds` workflow uses (LibreLane 3.0.5, IHP PDK at the commit
-the shuttle pins, `src/config.json` unchanged):
+Hardened locally with the same flow the `gds` workflow uses (LibreLane 3.0.5, IHP SG13G2 PDK at the
+commit the shuttle pins, `src/config.json` unchanged), at the 6 × 4 tiles the Jane Street
+challenge sets:
 
 | | |
 | --- | --- |
-| Tiles | 6 × 2, 1289.28 × 313.74 µm |
-| Cells | 13,144 after synthesis; 17,135 after place and route, not counting fill (includes 2,868 hold buffers and 257 clock tree cells) |
-| Utilisation | 72 % of the core area |
+| Tiles | 6 × 4, 1289.28 × 710.64 µm |
+| Cells | 15,513 after synthesis; 20,037 after place and route, not counting fill (includes 3,059 hold buffers and 301 clock tree cells) |
+| Utilisation | 35 % of the core area; the lower third of the die is free |
 | Routing | 0 violations after detailed routing, 0 antenna violations |
-| Sign-off checks | Magic DRC 0 errors, LVS clean (netgen: circuits match uniquely), IHP KLayout DRC clean; Tiny Tapeout precheck passed (all 10 checks) |
-| Setup slack at 50 MHz | 11.0 ns typical, 5.9 ns slow (1.08 V, 125 °C), 13.0 ns fast |
-| Hold slack | 0.31 ns typical, 0.63 ns slow, 0.12 ns fast |
-| Maximum clock | 71 MHz at the slow corner, 111 MHz typical |
+| Sign-off checks | Magic DRC 0 errors, KLayout IHP DRC 0 errors, LVS clean, Tiny Tapeout precheck passed; cocotb gate-level tests 4 of 4 pass |
+| Setup slack at 50 MHz | 8.8 ns typical, 2.3 ns slow (1.08 V, 125 °C), 12.7 ns fast |
+| Hold slack | 0.31 ns typical, 0.64 ns slow, 0.12 ns fast |
+| Maximum clock | 57 MHz at the slow corner, 89 MHz typical |
+| Power | about 9 mW at 50 MHz (7.2 to 11.3 mW across corners) |
 
-4 × 2 tiles (268,000 µm²) is smaller than the cell area alone, so 6 × 2 is the smallest size that
-fits. The GitHub run is the one that counts for submission.
+The Jane Street entry itself will be rebuilt on their CMOS5L template. The GitHub run is the one
+that counts for submission.
 
 ### Running the cocotb test
 
@@ -168,6 +175,10 @@ Every test resets the chip, sends `0x55` for auto-baud, programs it with instruc
 | `t_manchester` | Manchester transmit decoded by the other channel |
 | `t_usb` | USB low speed receive (stuffing, SE1 and stuff errors), transmit, and loopback |
 | `t_random` | 1,800 random programs in both bit orders |
+| `t_i2c_target` | I2C target at 0x42: write, read (branch on R/W), wrong address, repeated START; SCL 417 kHz and 1 MHz |
+| `t_branch` | SWD-style acknowledge (OK continues, WAIT and FAULT abort); CAN-style arbitration won and lost |
+| `t_stream` | underrun abort; 12-byte UART and 20-byte SPI frames fed while running |
+| `t_random_branch` | 600 random branch programs: capture-any header, random rules, actions and run modes |
 
 ## Regenerating the diagram
 
@@ -178,10 +189,12 @@ python docs/diagram/make_diagram.py      # writes docs/protocol_emulator_archite
 
 ## Status and limits
 
-All tests pass, and the design places, routes and meets timing on 6 × 2 Tiny Tapeout tiles.
+All tests pass, and the design places, routes and meets timing on 6 × 4 Tiny Tapeout tiles.
 Known limits are listed in the design reference; the main ones are the return link bandwidth
-(full-size Ethernet frames overflow and are reported), 8-entry transmit packets, and no I2C target
-mode yet. Still to do: a Quartus compile (so far checked with Yosys, Verilator and Icarus).
+(full-size Ethernet frames overflow and are reported), the instruction link rate when feeding
+fast fixed-timing lines, and no CRC generation on chip. Still to do: the CMOS5L build once Jane
+Street release their template, formal proofs, and a Quartus compile (so far checked with Yosys,
+Verilator and Icarus).
 
 ## Licence
 

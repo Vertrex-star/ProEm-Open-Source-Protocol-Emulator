@@ -11,8 +11,11 @@ then sends and receives frames on the `uio` pins. Received data and a status byt
 back to the host on `uo[0]`.
 
 Each channel is a frame chain (START, up to six headers, MAIN, END and a watchdog) behind a line
-codec, so the same hardware speaks UART, SPI (controller and target), I2C (controller, with clock
-stretching), PS/2, 10BASE-T receive (Manchester) and USB low speed (NRZI with bit stuffing).
+codec, so the same hardware speaks UART, SPI (controller and target), I2C (controller with clock
+stretching, and target), PS/2, 10BASE-T receive (Manchester) and USB low speed (NRZI with bit
+stuffing). Two `BRANCH` rules per channel let a frame change direction or abort on a field it has
+just received, which gives I2C target mode, SWD-style acknowledge handling and CAN-style
+arbitration.
 
 ![Architecture](architecture_datasheet.png)
 
@@ -22,7 +25,7 @@ byte `{OP[3:0], CH, N[2:0]}` followed by 0 to 4 operand bytes. The full instruct
 
 | OP | Instruction | Operands |
 | --- | --- | --- |
-| 0x1, 0x2 | START, HDR n | `{W, CAP, GRP, CYC}`, `{SR, -, PIN}`, `VALUE` |
+| 0x1, 0x2 | START, HDR n | `{W, CAP, GRP, CYC}`, `{SR, ANY, -, PIN}`, `VALUE` |
 | 0x3 | MAIN | `{DIR, WE, ACK, SR, PIN}`, `BITS[15:0]` |
 | 0x4 | END | `{LEN, PIN_A}`, `{PAIR, INV, ERR, -, PIN_B}`, `PATTERN[15:0]` |
 | 0x5 | WDOG | `LIMIT[15:0]` |
@@ -32,10 +35,11 @@ byte `{OP[3:0], CH, N[2:0]}` followed by 0 to 4 operand bytes. The full instruct
 | 0xC | DATA | `VALUE` (length = N + 1) |
 | 0xD | OUT | `{DRIVE, IDLE, PAIR, EOP, I2C, CSH, -}` |
 | 0xE | LINK | return link clocks per bit (0 = same as the auto-baud rate) |
+| 0xF | BRANCH | `{HIT, MISS, SRC, BLOCK}`, `MASK`, `VALUE`; `N` = rule 0 or 1 |
 
 Return messages are two bytes: `{1, 0, C, 0, LEN}` then the value for received data on channel C,
 `LEN = 15` for the end-of-frame status (bit 0 complete, 1 abort, 2 timeout, 3 line error,
-4 overflow), and `0xC0` for link events (bit 0 framing error, 1 bad instruction, 2 and 3 data
+4 overflow, 5 underrun, 6 branch matched, 7 branch abort), and `0xC0` for link events (bit 0 framing error, 1 bad instruction, 2 and 3 data
 dropped on A or B).
 
 The protocol pins are the eight `uio` pads, numbered 0 to 7 in the instructions. Channel A drives
@@ -55,7 +59,11 @@ inputs only.
    MOSI on pad 0, and channel B samples pad 0 on the rising edge of pad 2 while pad 6 (A's chip
    select) is low.
 
-Both loopbacks are in `test/test.py` (cocotb), which runs on the RTL and on the gate-level netlist.
+4. I2C loopback: connect `uio[3]` to `uio[0]` with a pull-up on that wire and on `uio[2]`. Channel
+   A is the controller (SCL on pad 2), channel B the target at 0x42 reading SDA on pad 0 and
+   answering on pad 3.
+
+All of these are in `test/test.py` (cocotb), which runs on the RTL and on the gate-level netlist.
 The full pin-level test suite for every standard is in `sim/` (`scripts/run.sh`).
 
 ## External hardware
