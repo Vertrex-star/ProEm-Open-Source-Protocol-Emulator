@@ -54,6 +54,7 @@ src/
 test/               cocotb test (tb.v, test.py), runs on RTL and on the gate-level netlist
 sim/                pin-level test bench (bench.h) and one test per standard (t_*.cpp)
 scripts/            run.sh (all tests + synthesis), sta.sh (timing check)
+gds/                the layout (GDS, LEF), layout images and a results summary
 docs/               design reference and ISA spec (PDF + LaTeX), architecture diagram,
                     info.md (Tiny Tapeout datasheet page), layout renders
   diagram/          diagram generator (make_diagram.py) and its fonts (SIL OFL)
@@ -111,6 +112,9 @@ lines (I2C, USB) work on a single pad. A channel only drives its pads when `OUT`
 ### Layout
 
 ![Layout](docs/layout_full.png)
+
+The GDS file, pictures of the layout and a summary of space, power, performance and the Jane Street
+challenge are in [gds/](gds/README.md).
 
 Hardened locally with the same flow the `gds` workflow uses (LibreLane 3.0.5, IHP PDK at the commit
 the shuttle pins, `src/config.json` unchanged):

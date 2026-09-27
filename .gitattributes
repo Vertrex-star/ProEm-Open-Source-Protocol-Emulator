@@ -3,3 +3,7 @@
 *.sv text eol=lf
 *.pdf binary
 *.png binary
+*.gds binary
+*.oas binary
+*.jpg binary
+*.lef text eol=lf
