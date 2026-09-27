@@ -23,6 +23,8 @@ module first_counter (
 	input logic[7:0] pins,
 	input logic msb,
 	input logic enable,
+	input logic event_mode,
+	input logic start_event,
 	input logic complete,
 	input logic abort,
 
@@ -91,7 +93,7 @@ always_ff@(posedge clk or negedge rst_n) begin
 				internal_push <= (length != 4'd0);
 			end
 		end else if (internal_clock == 8'd0) begin
-			if (enable && internal_configured && !internal_success && input_bit == compare_data[0]) begin
+			if (enable && internal_configured && !internal_success && (event_mode ? start_event : (input_bit == compare_data[0]))) begin
 				internal_success <= 1'b1;
 			end
 		end else if (tick && !internal_success) begin

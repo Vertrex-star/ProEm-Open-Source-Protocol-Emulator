@@ -22,6 +22,7 @@ module line_codec (
 	input logic in_frame,
 	input logic frame_mark,
 	input logic halt,
+	input logic tx_cancel,
 	input logic tx_valid,
 	input logic [3:0] tx_len,
 	input logic [7:0] tx_data,
@@ -32,6 +33,11 @@ module line_codec (
 	output logic tick,
 	output logic end_tick,
 	output logic code_error,
+	output logic strict_tx,
+	output logic tx_mismatch,
+	output logic i2c_target,
+	output logic i2c_start,
+	output logic i2c_stop,
 	output logic data_out,
 	output logic data_oe,
 	output logic pair_out,
@@ -75,6 +81,7 @@ logic nrzi;
 logic pairCode;
 logic thomas;
 logic openDrain;
+logic i2cTarget;
 
 logic [15:0] rxCount;
 logic [3:0] runCount;
@@ -84,6 +91,7 @@ logic rawA;
 logic lineB;
 logic clockIn;
 logic prevA;
+logic prevRaw;
 logic prevClock;
 logic aEdge;
 logic clockRise;
@@ -132,6 +140,7 @@ logic [3:0] nextLen;
 logic [3:0] txRun;
 logic [3:0] txRunNew;
 logic [1:0] step;
+logic [1:0] dropCount;
 logic nextValid;
 logic sendBit;
 logic nrziLevel;
@@ -165,6 +174,9 @@ logic clockLevel;
 logic selectActive;
 logic sending;
 logic internal_tx_done;
+logic checkPoint;
+logic startWait;
+logic idleHold;
 
 assign code = line_config[15:13];
 assign inv = line_config[12];
@@ -192,6 +204,7 @@ assign thomas = (code == 3'd4);
 assign nrzi = (code == 3'd1) || (code == 3'd2);
 assign pairCode = (code == 3'd2);
 assign openDrain = (drive == 2'd2);
+assign i2cTarget = i2c && (source == SRC_SYNC);
 assign half = div >> 1;
 assign blankSum = {2'd0, div} + {1'b0, div, 1'b0};
 assign blank = blankSum[17:2];
@@ -221,6 +234,7 @@ assign nextRun = runMatch ? runCount + 1'b1 : (stuffAny ? 4'd1 : 4'd0);
 always_ff @(posedge clk or negedge rst_n) begin
 	if (!rst_n) begin
 		prevA <= 1'b0;
+		prevRaw <= 1'b1;
 		prevClock <= 1'b0;
 		rxCount <= '0;
 		locked <= 1'b0;
@@ -234,6 +248,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 		internal_code_error <= 1'b0;
 	end else begin
 		prevA <= lineA;
+		prevRaw <= rawA;
 		prevClock <= clockIn;
 		rxTick <= goodBit;
 		rxStrobe <= strobe;
@@ -307,6 +322,8 @@ always_comb begin
 end
 
 assign dataBitEnded = !stuffing;
+assign startWait = i2cTarget && !shiftEdge;
+assign idleHold = packetActive && !(i2cTarget && openDrain);
 assign runMatchTx = stuffAny ? (sendBit == txRunValue) : sendBit;
 assign txRunNew = runMatchTx ? txRun + 1'b1 : (stuffAny ? 4'd1 : 4'd0);
 assign willStuff = dataBitEnded && stuffOn && (txRunNew == stuffLen);
@@ -322,6 +339,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 		state <= T_IDLE;
 		txCount <= '0;
 		step <= '0;
+		dropCount <= '0;
 		nextValid <= 1'b0;
 		nextLen <= '0;
 		nextData <= '0;
@@ -343,7 +361,11 @@ always_ff @(posedge clk or negedge rst_n) begin
 	end else begin
 		genTick <= 1'b0;
 		internal_tx_done <= 1'b0;
-		if (tx_valid && !nextValid && !endPending) begin
+		if (dropCount != 2'd0) begin
+			dropCount <= dropCount - 1'b1;
+			internal_tx_done <= 1'b1;
+		end
+		if (tx_valid && !nextValid && !endPending && !tx_cancel) begin
 			nextValid <= 1'b1;
 			nextLen <= tx_len;
 			nextData <= tx_data;
@@ -352,204 +374,226 @@ always_ff @(posedge clk or negedge rst_n) begin
 			endPending <= 1'b1;
 		end
 
-		unique case (state)
-			T_IDLE: begin
-				txCount <= '0;
-				step <= '0;
-				phaseB <= 1'b0;
-				if (nextValid && nextLen == 4'd0) begin
-					if (i2c && generating && i2cBusy) begin
-						state <= T_REPEAT;
-					end else begin
-						nextValid <= 1'b0;
-						internal_tx_done <= 1'b1;
-					end
-				end else if (nextValid && i2c && generating && !i2cBusy) begin
-					state <= T_START;
-				end else if (nextValid) begin
-					nextValid <= 1'b0;
-					shiftData <= nextData;
-					shiftLeft <= nextLen;
-					sendBit <= nextData[0];
-					stuffing <= 1'b0;
-					if (!packetActive) begin
-						txRun <= '0;
-						txRunValue <= 1'b0;
-						nrziLevel <= !nextData[0];
-					end else begin
-						nrziLevel <= nextData[0] ? nrziLevel : !nrziLevel;
-					end
-					packetActive <= 1'b1;
-					state <= T_BIT;
-				end else if (generating && listen && !endPending && (!i2c || i2cBusy)) begin
-					state <= T_READ;
-				end else if (endPending) begin
-					endPending <= 1'b0;
-					if (i2c && generating && i2cBusy) begin
-						state <= T_STOP;
-					end else if (packetActive && eopEnable) begin
-						state <= T_EOP;
-					end else begin
-						packetActive <= 1'b0;
-					end
-				end
-			end
-
-			T_BIT: begin
-				if (generating && !phaseB) begin
-					if (txCount == div - 1'b1) begin
-						txCount <= '0;
-						phaseB <= 1'b1;
-					end else begin
-						txCount <= txCount + 1'b1;
-					end
-				end else if (generating && !clockHigh) begin
-					txCount <= '0;
-				end else if (endOfBit) begin
-					txCount <= '0;
-					phaseB <= 1'b0;
-					if (generating && !sampleLeading) begin
-						genTick <= 1'b1;
-					end
-					holdLevel <= level;
-					if (willStuff) begin
-						stuffing <= 1'b1;
-						stuffBit <= stuffValue;
-					end else begin
-						stuffing <= 1'b0;
-					end
-					if (stuffing) begin
-						txRun <= stuffAny ? 4'd1 : 4'd0;
-						txRunValue <= sendBit;
-					end else begin
-						txRun <= txRunNew;
-						txRunValue <= sendBit;
-					end
-					if (continueNext) begin
-						shiftData <= nextData;
-						shiftLeft <= nextLen;
-						nextValid <= 1'b0;
-					end else begin
-						shiftData <= dataAfter;
-						shiftLeft <= leftAfter;
-					end
-					if (entryDone) begin
-						internal_tx_done <= 1'b1;
-					end
-					if (!entryDone || continueNext) begin
-						sendBit <= nextBitValue;
-						nrziLevel <= nextBitValue ? nrziLevel : !nrziLevel;
-					end else begin
-						state <= T_IDLE;
-					end
-				end else begin
-					if (generating && phaseB && txCount == '0 && sampleLeading) begin
-						genTick <= 1'b1;
-					end
-					txCount <= txCount + 1'b1;
-				end
-			end
-
-			T_READ: begin
-				if (!phaseB) begin
-					if (txCount == div - 1'b1) begin
-						txCount <= '0;
-						phaseB <= 1'b1;
-					end else begin
-						txCount <= txCount + 1'b1;
-					end
-				end else if (!clockHigh) begin
-					txCount <= '0;
-				end else if (txCount == div - 1'b1) begin
-					txCount <= '0;
-					phaseB <= 1'b0;
-					if (!sampleLeading) begin
-						genTick <= 1'b1;
-					end
-					state <= T_IDLE;
-				end else begin
-					if (txCount == '0 && sampleLeading) begin
-						genTick <= 1'b1;
-					end
-					txCount <= txCount + 1'b1;
-				end
-			end
-
-			T_START: begin
-				if (txCount == div - 1'b1) begin
-					txCount <= '0;
-					if (step == 2'd1) begin
-						step <= '0;
-						i2cBusy <= 1'b1;
-						state <= T_IDLE;
-					end else begin
-						step <= step + 1'b1;
-					end
-				end else begin
-					txCount <= txCount + 1'b1;
-				end
-			end
-
-			T_REPEAT: begin
-				if (step == 2'd1 && !clockHigh) begin
-					txCount <= '0;
-				end else if (txCount == div - 1'b1) begin
-					txCount <= '0;
-					if (step == 2'd3) begin
-						step <= '0;
-						nextValid <= 1'b0;
-						internal_tx_done <= 1'b1;
-						state <= T_IDLE;
-					end else begin
-						step <= step + 1'b1;
-					end
-				end else begin
-					txCount <= txCount + 1'b1;
-				end
-			end
-
-			T_STOP: begin
-				if (step == 2'd1 && !clockHigh) begin
-					txCount <= '0;
-				end else if (txCount == div - 1'b1) begin
-					txCount <= '0;
-					if (step == 2'd2) begin
-						step <= '0;
-						i2cBusy <= 1'b0;
-						packetActive <= 1'b0;
-						state <= T_IDLE;
-					end else begin
-						step <= step + 1'b1;
-					end
-				end else begin
-					txCount <= txCount + 1'b1;
-				end
-			end
-
-			T_EOP: begin
-				if (step == 2'd0 && {1'b0, txCount} >= eopLength - 1'b1) begin
-					txCount <= '0;
-					if (pairCode) begin
-						step <= 2'd1;
-					end else begin
-						packetActive <= 1'b0;
-						state <= T_IDLE;
-					end
-				end else if (step == 2'd1 && txCount == div - 1'b1) begin
+		if (tx_cancel) begin
+			dropCount <= {1'b0, (state == T_BIT)} + {1'b0, nextValid};
+			nextValid <= 1'b0;
+			state <= T_IDLE;
+			txCount <= '0;
+			step <= '0;
+			phaseB <= 1'b0;
+			stuffing <= 1'b0;
+			packetActive <= 1'b0;
+			i2cBusy <= 1'b0;
+		end else begin
+			unique case (state)
+				T_IDLE: begin
 					txCount <= '0;
 					step <= '0;
-					nrziLevel <= 1'b0;
-					packetActive <= 1'b0;
-					state <= T_IDLE;
-				end else begin
-					txCount <= txCount + 1'b1;
+					phaseB <= 1'b0;
+					if (nextValid && nextLen == 4'd0) begin
+						if (i2c && generating && i2cBusy) begin
+							state <= T_REPEAT;
+						end else begin
+							nextValid <= 1'b0;
+							internal_tx_done <= 1'b1;
+						end
+					end else if (nextValid && i2c && generating && !i2cBusy) begin
+						state <= T_START;
+					end else if (nextValid && !startWait) begin
+						nextValid <= 1'b0;
+						shiftData <= nextData;
+						shiftLeft <= nextLen;
+						sendBit <= nextData[0];
+						stuffing <= 1'b0;
+						if (!packetActive) begin
+							txRun <= '0;
+							txRunValue <= 1'b0;
+							nrziLevel <= !nextData[0];
+						end else begin
+							nrziLevel <= nextData[0] ? nrziLevel : !nrziLevel;
+						end
+						packetActive <= 1'b1;
+						state <= T_BIT;
+					end else if (generating && listen && !endPending && (!i2c || i2cBusy)) begin
+						state <= T_READ;
+					end else if (endPending) begin
+						endPending <= 1'b0;
+						if (i2c && generating && i2cBusy) begin
+							state <= T_STOP;
+						end else if (packetActive && eopEnable) begin
+							state <= T_EOP;
+						end else begin
+							packetActive <= 1'b0;
+						end
+					end
 				end
-			end
 
-			default: begin
-				state <= T_IDLE;
-			end
-		endcase
+				T_BIT: begin
+					if (generating && !phaseB) begin
+						if (txCount == div - 1'b1) begin
+							txCount <= '0;
+							phaseB <= 1'b1;
+						end else begin
+							txCount <= txCount + 1'b1;
+						end
+					end else if (generating && !clockHigh) begin
+						txCount <= '0;
+					end else if (endOfBit) begin
+						txCount <= '0;
+						phaseB <= 1'b0;
+						if (generating && !sampleLeading) begin
+							genTick <= 1'b1;
+						end
+						holdLevel <= level;
+						if (willStuff) begin
+							stuffing <= 1'b1;
+							stuffBit <= stuffValue;
+						end else begin
+							stuffing <= 1'b0;
+						end
+						if (stuffing) begin
+							txRun <= stuffAny ? 4'd1 : 4'd0;
+							txRunValue <= sendBit;
+						end else begin
+							txRun <= txRunNew;
+							txRunValue <= sendBit;
+						end
+						if (continueNext) begin
+							shiftData <= nextData;
+							shiftLeft <= nextLen;
+							nextValid <= 1'b0;
+						end else begin
+							shiftData <= dataAfter;
+							shiftLeft <= leftAfter;
+						end
+						if (entryDone) begin
+							internal_tx_done <= 1'b1;
+						end
+						if (!entryDone || continueNext) begin
+							sendBit <= nextBitValue;
+							nrziLevel <= nextBitValue ? nrziLevel : !nrziLevel;
+						end else begin
+							state <= T_IDLE;
+						end
+					end else begin
+						if (generating && phaseB && txCount == '0 && sampleLeading) begin
+							genTick <= 1'b1;
+						end
+						txCount <= txCount + 1'b1;
+					end
+				end
+
+				T_READ: begin
+					if (!phaseB) begin
+						if (txCount == div - 1'b1) begin
+							txCount <= '0;
+							phaseB <= 1'b1;
+						end else begin
+							txCount <= txCount + 1'b1;
+						end
+					end else if (!clockHigh) begin
+						txCount <= '0;
+					end else if (txCount == div - 1'b1) begin
+						txCount <= '0;
+						phaseB <= 1'b0;
+						if (!sampleLeading) begin
+							genTick <= 1'b1;
+						end
+						state <= T_IDLE;
+					end else begin
+						if (txCount == '0 && sampleLeading) begin
+							genTick <= 1'b1;
+						end
+						txCount <= txCount + 1'b1;
+					end
+				end
+
+				T_START: begin
+					if (txCount == div - 1'b1) begin
+						txCount <= '0;
+						if (step == 2'd1) begin
+							step <= '0;
+							i2cBusy <= 1'b1;
+							state <= T_IDLE;
+						end else begin
+							step <= step + 1'b1;
+						end
+					end else begin
+						txCount <= txCount + 1'b1;
+					end
+				end
+
+				T_REPEAT: begin
+					if (step == 2'd1 && !clockHigh) begin
+						txCount <= '0;
+					end else if (txCount == div - 1'b1) begin
+						txCount <= '0;
+						if (step == 2'd3) begin
+							step <= '0;
+							nextValid <= 1'b0;
+							internal_tx_done <= 1'b1;
+							state <= T_IDLE;
+						end else begin
+							step <= step + 1'b1;
+						end
+					end else begin
+						txCount <= txCount + 1'b1;
+					end
+				end
+
+				T_STOP: begin
+					if (step == 2'd1 && !clockHigh) begin
+						txCount <= '0;
+					end else if (txCount == div - 1'b1) begin
+						txCount <= '0;
+						if (step == 2'd2) begin
+							step <= '0;
+							i2cBusy <= 1'b0;
+							packetActive <= 1'b0;
+							state <= T_IDLE;
+						end else begin
+							step <= step + 1'b1;
+						end
+					end else begin
+						txCount <= txCount + 1'b1;
+					end
+				end
+
+				T_EOP: begin
+					if (step == 2'd0 && {1'b0, txCount} >= eopLength - 1'b1) begin
+						txCount <= '0;
+						if (pairCode) begin
+							step <= 2'd1;
+						end else begin
+							packetActive <= 1'b0;
+							state <= T_IDLE;
+						end
+					end else if (step == 2'd1 && txCount == div - 1'b1) begin
+						txCount <= '0;
+						step <= '0;
+						nrziLevel <= 1'b0;
+						packetActive <= 1'b0;
+						state <= T_IDLE;
+					end else begin
+						txCount <= txCount + 1'b1;
+					end
+				end
+
+				default: begin
+					state <= T_IDLE;
+				end
+			endcase
+		end
+	end
+end
+
+always_comb begin
+	if (timed) begin
+		checkPoint = (txCount == (manchester ? (half >> 1) : half));
+	end else if (generating) begin
+		checkPoint = phaseB && clockHigh && (txCount == half);
+	end else begin
+		checkPoint = syncTick;
 	end
 end
 
@@ -560,7 +604,7 @@ always_comb begin
 	clockLevel = clockIdle;
 	case (state)
 		T_IDLE: begin
-			level = packetActive ? holdLevel : (openDrain ? 1'b1 : outIdle);
+			level = idleHold ? holdLevel : (openDrain ? 1'b1 : outIdle);
 			clockLevel = i2c ? !i2cBusy : clockIdle;
 		end
 		T_BIT: begin
@@ -599,12 +643,17 @@ assign dataPin = se0Out ? 1'b0 : (level ^ inv);
 assign sending = (state != T_IDLE) || packetActive;
 assign selectActive = in_frame || sending || nextValid || !line_free;
 
-assign tx_ready = !nextValid && !endPending;
+assign tx_ready = !nextValid && !endPending && !tx_cancel;
 assign tx_done = internal_tx_done;
 assign view = viewPins;
 assign tick = timed ? rxTick : (generating ? genTick : syncTick);
 assign end_tick = (endSel == 2'd1) ? 1'b1 : ((endSel == 2'd2) ? (timed ? rxStrobe : tick) : tick);
 assign code_error = internal_code_error;
+assign strict_tx = !generating;
+assign tx_mismatch = (state == T_BIT) && checkPoint && (rawA != dataPin);
+assign i2c_target = i2cTarget;
+assign i2c_start = i2cTarget && prevRaw && !rawA && clockIn && prevClock;
+assign i2c_stop = i2cTarget && !prevRaw && rawA && clockIn && prevClock;
 assign data_out = openDrain ? 1'b0 : dataPin;
 assign data_oe = openDrain ? !dataPin : ((drive == 2'd3) || (drive == 2'd1 && sending));
 assign pair_out = se0Out ? 1'b0 : !(level ^ inv);

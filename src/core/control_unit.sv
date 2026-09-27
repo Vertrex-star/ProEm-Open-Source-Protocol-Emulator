@@ -26,6 +26,7 @@ module control_unit (
 	output logic cfg_write,
 	output logic [1:0] cfg_group,
 	output logic cfg_sr,
+	output logic cfg_any,
 	output logic cfg_follow,
 	output logic [15:0] cfg_main_cycles,
 	output logic cfg_wait_end,
@@ -70,6 +71,7 @@ localparam logic [3:0] OP_CLOCK = 4'hB;
 localparam logic [3:0] OP_DATA = 4'hC;
 localparam logic [3:0] OP_OUT = 4'hD;
 localparam logic [3:0] OP_LINK = 4'hE;
+localparam logic [3:0] OP_BRANCH = 4'hF;
 
 logic [31:0] operands;
 logic [7:0] startValue;
@@ -107,6 +109,7 @@ logic internal_we_b;
 logic internal_capture;
 logic internal_write;
 logic internal_sr;
+logic internal_any;
 logic internal_follow;
 logic internal_wait_end;
 logic internal_ack;
@@ -133,7 +136,7 @@ sel select;
 
 always_comb begin
 	case (rx_data[7:4])
-		OP_START, OP_HDR, OP_MAIN: length = 3'd3;
+		OP_START, OP_HDR, OP_MAIN, OP_BRANCH: length = 3'd3;
 		OP_END, OP_CLOCK: length = 3'd4;
 		OP_WDOG, OP_LINE, OP_LINK: length = 3'd2;
 		OP_DATA, OP_OUT: length = 3'd1;
@@ -144,7 +147,7 @@ end
 assign startMsb = chain ? msbB : msbA;
 assign startCycles = operands[19:16];
 assign startValue = (!startMsb && startCycles != 4'd0 && startCycles < 4'd8) ? (operands[7:0] << (4'd8 - startCycles)) : operands[7:0];
-assign chainWrite = (opcode == OP_START) || (opcode == OP_HDR && index != 3'd0 && index != 3'd7) || (opcode == OP_MAIN) || (opcode == OP_END) || (opcode == OP_WDOG) || (opcode == OP_ORDER);
+assign chainWrite = (opcode == OP_START) || (opcode == OP_HDR && index != 3'd0 && index != 3'd7) || (opcode == OP_MAIN) || (opcode == OP_END) || (opcode == OP_WDOG) || (opcode == OP_ORDER) || (opcode == OP_BRANCH && index[2:1] == 2'd0);
 
 always_ff @(posedge clk or negedge rst_n) begin
 	if (!rst_n) begin
@@ -179,6 +182,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 		internal_capture <= 1'b0;
 		internal_write <= 1'b0;
 		internal_sr <= 1'b0;
+		internal_any <= 1'b0;
 		internal_follow <= 1'b0;
 		internal_wait_end <= 1'b0;
 		internal_ack <= 1'b0;
@@ -246,6 +250,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 						internal_group <= operands[21:20];
 						internal_cycles <= {4'd0, operands[19:16]};
 						internal_sr <= operands[15];
+						internal_any <= (opcode == OP_HDR) && operands[14];
 						internal_pin <= operands[10:8];
 						internal_compare <= (opcode == OP_START) ? startValue : operands[7:0];
 						if (opcode == OP_HDR && (index == 3'd0 || index == 3'd7)) begin
@@ -338,6 +343,15 @@ always_ff @(posedge clk or negedge rst_n) begin
 					OP_LINK: begin
 						internal_link_div <= operands[15:0];
 					end
+					OP_BRANCH: begin
+						internal_sel <= {3'b100, index[0]};
+						internal_main_cycles <= {8'd0, operands[23:16]};
+						internal_cycles <= operands[15:8];
+						internal_compare <= operands[7:0];
+						if (index[2:1] != 2'd0) begin
+							internal_cmd_error <= 1'b1;
+						end
+					end
 					OP_NOP: begin
 					end
 					default: begin
@@ -363,6 +377,7 @@ assign cfg_capture = internal_capture;
 assign cfg_write = internal_write;
 assign cfg_group = internal_group;
 assign cfg_sr = internal_sr;
+assign cfg_any = internal_any;
 assign cfg_follow = internal_follow;
 assign cfg_main_cycles = internal_main_cycles;
 assign cfg_wait_end = internal_wait_end;

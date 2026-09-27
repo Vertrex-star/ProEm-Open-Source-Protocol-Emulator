@@ -15,6 +15,7 @@ src/core/frame_chain/start_router.sv
 src/core/frame_chain/main_counter.sv
 src/core/frame_chain/end_counter.sv
 src/core/frame_chain/watchdog.sv
+src/core/frame_chain/branch_unit.sv
 src/core/frame_chain/frame_chain.sv
 src/core/line_codec.sv
 src/core/entry_dispatch.sv

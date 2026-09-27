@@ -79,6 +79,7 @@ logic cfg_we_b;
 logic cfg_capture;
 logic cfg_write;
 logic cfg_sr;
+logic cfg_any;
 logic cfg_follow;
 logic cfg_wait_end;
 logic cfg_ack;
@@ -145,6 +146,7 @@ control_unit control (
 	.cfg_write(cfg_write),
 	.cfg_group(cfg_group),
 	.cfg_sr(cfg_sr),
+	.cfg_any(cfg_any),
 	.cfg_follow(cfg_follow),
 	.cfg_main_cycles(cfg_main_cycles),
 	.cfg_wait_end(cfg_wait_end),
@@ -191,6 +193,7 @@ emulator_channel #(
 	.cfg_write(cfg_write),
 	.cfg_group(cfg_group),
 	.cfg_sr(cfg_sr),
+	.cfg_any(cfg_any),
 	.cfg_follow(cfg_follow),
 	.cfg_main_cycles(cfg_main_cycles),
 	.cfg_wait_end(cfg_wait_end),
@@ -240,6 +243,7 @@ emulator_channel #(
 	.cfg_write(cfg_write),
 	.cfg_group(cfg_group),
 	.cfg_sr(cfg_sr),
+	.cfg_any(cfg_any),
 	.cfg_follow(cfg_follow),
 	.cfg_main_cycles(cfg_main_cycles),
 	.cfg_wait_end(cfg_wait_end),

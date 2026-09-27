@@ -14,7 +14,7 @@ project:
   language: "SystemVerilog"
   clock_hz: 50000000
 
-  tiles: "6x2"
+  tiles: "6x4"
 
   top_module: "tt_um_vertrex_star_proem"
 
@@ -29,6 +29,7 @@ project:
     - "core/frame_chain/main_counter.sv"
     - "core/frame_chain/end_counter.sv"
     - "core/frame_chain/watchdog.sv"
+    - "core/frame_chain/branch_unit.sv"
     - "core/frame_chain/frame_chain.sv"
     - "core/line_codec.sv"
     - "core/entry_dispatch.sv"

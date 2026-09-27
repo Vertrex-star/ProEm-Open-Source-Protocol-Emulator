@@ -4,7 +4,7 @@
 // Module: frame_chain
 // Type: RTL, core (frame chain)
 // Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > emulator_channel > frame_chain
-// Submodules: first_counter, header_counter (x6), start_router, main_counter, end_counter, watchdog, frame_buffer
+// Submodules: first_counter, header_counter (x6), start_router, branch_unit, main_counter, end_counter, watchdog, frame_buffer
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
 // Description:
@@ -36,6 +36,7 @@ module frame_chain #(
 	input logic cfg_write,
 	input logic[1:0] cfg_group,
 	input logic cfg_sr,
+	input logic cfg_any,
 	input logic cfg_follow,
 	input logic[15:0] cfg_main_cycles,
 	input logic cfg_wait_end,
@@ -46,6 +47,12 @@ module frame_chain #(
 	input logic cfg_invert,
 	input logic cfg_error,
 	input logic tx_done,
+	input logic discard,
+	input logic strict_tx,
+	input logic tx_mismatch,
+	input logic i2c_target,
+	input logic i2c_start,
+	input logic i2c_stop,
 	input logic out_rd_en,
 
 	output logic host_pop,
@@ -62,7 +69,8 @@ module frame_chain #(
 	output logic line_free,
 	output logic listen,
 	output logic armed,
-	output logic in_frame
+	output logic in_frame,
+	output logic tx_cancel
 );
 
 logic[blocks-1:0] block_success;
@@ -80,6 +88,11 @@ logic[7:0] block_value [0:blocks-1];
 logic[3:0] block_len [0:blocks-1];
 logic[1:0] block_group [0:blocks-1];
 logic[1:0] mode;
+logic[1:0] base_mode;
+logic[1:0] new_mode;
+logic set_mode;
+logic branch_stall;
+logic[blocks*8-1:0] block_values;
 logic[2:0] data_pin;
 logic[2:0] end_pin;
 logic[2:0] end_pin_b;
@@ -90,7 +103,7 @@ logic[12:0] fifo_raw;
 logic[7:0] reversed;
 logic[7:0] flipped;
 logic[4:0] outstanding;
-logic[4:0] status_flags;
+logic[7:0] status_flags;
 
 logic input_bit;
 logic end_a;
@@ -136,6 +149,22 @@ logic overflow_seen;
 logic frame_event;
 logic space;
 logic out_almost_full;
+logic branch_hit;
+logic branch_abort;
+logic hit_seen;
+logic underrun;
+logic i2c_break;
+logic i2c_abort;
+logic start_pending;
+logic start_prev;
+logic main_end;
+logic main_done;
+logic main_run;
+logic line_watch;
+logic finish_wait;
+logic main_waiting_end;
+logic cancel_now;
+logic internal_cancel;
 
 assign input_bit = pins[data_pin];
 assign end_a = raw_pins[end_pin];
@@ -161,12 +190,12 @@ always_comb begin
 	block_enable[0] = 1'b1;
 	sr_need[0] = 1'b0;
 	for (int k = 1; k < blocks; k++) begin
-		block_enable[k] = block_ready[k] && (!block_sr[k] || sr_sent[k]) && (!block_writing[k] || space);
+		block_enable[k] = block_ready[k] && (!block_sr[k] || sr_sent[k]) && (!block_writing[k] || space) && !branch_stall;
 		sr_need[k] = block_ready[k] && block_sr[k] && !sr_sent[k];
 	end
 end
 
-assign main_enable = main_ready && (!main_sr || main_sr_sent);
+assign main_enable = main_ready && (!main_sr || main_sr_sent) && !branch_stall;
 assign main_sr_need = main_ready && main_sr && !main_sr_sent;
 assign sr_accept = ((|sr_need) || main_sr_need) && !(|block_push) && !main_valid && !out_full && !abort && !halt;
 assign frame_event = complete || abort || write_end;
@@ -181,10 +210,16 @@ end
 
 assign listen = line_free && ((|block_listening) || main_listening);
 assign wire_accept = fifo_wr && fifo_din[12] && !out_full && !abort && !halt;
-assign write_end = timeout && main_writing && main_enable;
-assign abort = (|block_fail) || (timeout && !write_end) || internal_line_error;
+assign main_run = main_enable && !finish_wait;
+assign complete = (main_done && !(line_watch && main_writing)) || (finish_wait && line_free);
+assign write_end = timeout && main_writing && main_run;
+assign underrun = strict_tx && main_run && main_writing && !main_have_data && line_free && !main_pending && !main_listening && !write_end;
+assign i2c_break = i2c_target && (i2c_start || i2c_stop) && block_success[0];
+assign i2c_abort = i2c_break && !main_waiting_end;
+assign main_end = end_success || i2c_break;
+assign abort = (|block_fail) || (timeout && !write_end) || internal_line_error || branch_abort || underrun || i2c_abort;
 assign frame_reset = complete || abort || write_end || halt;
-assign commit = (commit_wait && !main_pending) || main_enable;
+assign commit = (commit_wait && !main_pending) || main_enable || branch_abort;
 
 always_ff@(posedge clk or negedge rst_n) begin
 	if (!rst_n) begin
@@ -196,6 +231,12 @@ always_ff@(posedge clk or negedge rst_n) begin
 		end_error <= 1'b0;
 		msb <= 1'b0;
 		mode <= '0;
+		base_mode <= '0;
+		hit_seen <= 1'b0;
+		start_pending <= 1'b0;
+		start_prev <= 1'b0;
+		finish_wait <= 1'b0;
+		internal_cancel <= 1'b0;
 		commit_wait <= 1'b0;
 		outstanding <= '0;
 		end_configured <= 1'b0;
@@ -213,11 +254,28 @@ always_ff@(posedge clk or negedge rst_n) begin
 			block_group[k] <= '0;
 		end
 	end else begin
-		outstanding <= outstanding + wire_accept - tx_done;
+		outstanding <= outstanding + {4'd0, wire_accept} - {4'd0, tx_done} - {4'd0, discard};
+		start_prev <= block_success[0];
+		internal_cancel <= cancel_now;
+		if (frame_reset) begin
+			finish_wait <= 1'b0;
+		end else if (main_done && line_watch && main_writing) begin
+			finish_wait <= 1'b1;
+		end
+		if (i2c_target && i2c_start) begin
+			start_pending <= 1'b1;
+		end else if (!i2c_target || (block_success[0] && !start_prev)) begin
+			start_pending <= 1'b0;
+		end
+		if (frame_event || halt) begin
+			hit_seen <= 1'b0;
+		end else if (branch_hit) begin
+			hit_seen <= 1'b1;
+		end
 		internal_line_error <= ((end_error && end_pair && end_tick && end_a && end_b && main_enable && !main_writing) || (code_error && block_success[0])) && !internal_line_error;
 		if (frame_event) begin
 			status_pending <= 1'b1;
-			status_flags <= status_flags | {overflow_seen || (fifo_wr && out_full), internal_line_error, timeout, abort, complete || write_end};
+			status_flags <= status_flags | {branch_abort, hit_seen || branch_hit, underrun, overflow_seen || (fifo_wr && out_full), internal_line_error, timeout, abort, complete || write_end};
 			overflow_seen <= 1'b0;
 		end else if (status_accept) begin
 			status_pending <= 1'b0;
@@ -233,7 +291,14 @@ always_ff@(posedge clk or negedge rst_n) begin
 			internal_armed <= 1'b0;
 		end else if (run) begin
 			internal_armed <= 1'b1;
+		end
+		if (run && !halt) begin
 			mode <= run_mode;
+			base_mode <= run_mode;
+		end else if (frame_reset) begin
+			mode <= base_mode;
+		end else if (set_mode) begin
+			mode <= new_mode;
 		end
 		for (int k = 1; k < blocks; k++) begin
 			if (cfg_we && cfg_sel == k) begin
@@ -293,6 +358,8 @@ first_counter start (
 	.pins(pins),
 	.msb(msb),
 	.enable(internal_armed && !rearm_wait),
+	.event_mode(i2c_target),
+	.start_event(start_pending),
 	.complete(frame_reset),
 	.abort(1'b0),
 	.success(block_success[0]),
@@ -317,6 +384,7 @@ generate
 			.clock_cycles(cfg_cycles),
 			.capture(cfg_capture),
 			.write_config(cfg_write),
+			.any_config(cfg_any),
 			.input_bit(input_bit),
 			.msb(msb),
 			.enable(block_enable[i]),
@@ -332,6 +400,35 @@ generate
 		);
 	end
 endgenerate
+
+always_comb begin
+	for (int k = 0; k < blocks; k++) begin
+		block_values[k*8 +: 8] = block_value[k];
+	end
+end
+
+branch_unit #(
+	.blocks(blocks)
+) brancher (
+	.clk(clk),
+	.rst_n(rst_n),
+	.cfg_we(cfg_we),
+	.cfg_sel(cfg_sel),
+	.cfg_rule(cfg_main_cycles[7:0]),
+	.cfg_mask(cfg_cycles),
+	.cfg_value(cfg_compare),
+	.block_success(block_success),
+	.block_values(block_values),
+	.mismatch(tx_mismatch),
+	.in_frame(block_success[0]),
+	.frame_reset(frame_reset),
+	.stall(branch_stall),
+	.set_mode(set_mode),
+	.new_mode(new_mode),
+	.hit(branch_hit),
+	.branch_abort(branch_abort),
+	.line_watch(line_watch)
+);
 
 start_router #(
 	.blocks(blocks)
@@ -356,19 +453,20 @@ main_counter main_block (
 	.ack_config(cfg_ack),
 	.input_bit(input_bit),
 	.msb(msb),
-	.enable(main_enable),
+	.enable(main_run),
 	.fifo_free(!(|block_push) && (!main_writing || space)),
-	.end_success(end_success),
+	.end_success(main_end),
 	.abort(abort || halt),
 	.host_empty(host_empty),
 	.host_data(host_data),
 	.host_len(host_len),
-	.complete(complete),
+	.complete(main_done),
 	.byte_done(byte_done),
 	.listening(main_listening),
 	.pending(main_pending),
 	.writing(main_writing),
 	.have_data(main_have_data),
+	.waiting_end(main_waiting_end),
 	.host_pop(host_pop),
 	.data_out(main_data),
 	.data_len(main_len),
@@ -409,7 +507,7 @@ always_comb begin
 	fifo_raw = '0;
 	if (status_accept) begin
 		fifo_wr = 1'b1;
-		fifo_raw = {1'b0, 4'hF, 3'd0, status_flags};
+		fifo_raw = {1'b0, 4'hF, status_flags};
 	end
 	if (sr_accept) begin
 		fifo_wr = 1'b1;
@@ -445,7 +543,7 @@ frame_buffer #(
 	.din(fifo_din),
 	.commit(commit),
 	.commit_all(wire_accept || status_accept),
-	.rollback(abort || halt),
+	.rollback((abort && !branch_abort) || halt),
 	.rd_en(out_rd_en),
 	.full(out_full),
 	.almost_full(out_almost_full),
@@ -456,5 +554,7 @@ frame_buffer #(
 assign line_error = internal_line_error;
 assign armed = internal_armed;
 assign in_frame = block_success[0];
+assign cancel_now = branch_abort || underrun || i2c_abort;
+assign tx_cancel = internal_cancel;
 
 endmodule

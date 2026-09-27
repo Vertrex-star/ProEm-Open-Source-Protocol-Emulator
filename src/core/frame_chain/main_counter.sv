@@ -37,6 +37,7 @@ module main_counter (
 	output logic pending,
 	output logic writing,
 	output logic have_data,
+	output logic waiting_end,
 	output logic host_pop,
 	output logic[7:0] data_out,
 	output logic[3:0] data_len,
@@ -108,6 +109,7 @@ assign len_mask = (9'd1 << (current_len - take)) - 1'b1;
 assign rest_mask = (9'd1 << ({1'b0, index} + 4'd1)) - 1'b1;
 assign take_value = msb ? ((current_data >> (current_len - take)) & take_mask[7:0]) : (current_data & take_mask[7:0]);
 assign have_data = carry_valid || !host_empty;
+assign waiting_end = !write_mode && enable && internal_wait_end;
 assign write_push = write_mode && enable && have_data && fifo_free && !ack_wait && !nack_pending;
 assign write_last = write_push && ({12'd0, take} == remaining);
 assign write_byte_end = write_push && (byte_bits + take == 4'd8);

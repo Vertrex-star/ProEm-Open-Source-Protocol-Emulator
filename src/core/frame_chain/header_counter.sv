@@ -19,6 +19,7 @@ module header_counter (
 	input logic[7:0] clock_cycles,
 	input logic capture,
 	input logic write_config,
+	input logic any_config,
 	input logic input_bit,
 	input logic msb,
 	input logic enable,
@@ -43,6 +44,7 @@ logic[2:0] position;
 
 logic internal_capture;
 logic internal_write;
+logic internal_any;
 logic internal_configured;
 logic internal_success;
 logic internal_fail;
@@ -59,6 +61,7 @@ always_ff@(posedge clk or negedge rst_n) begin
 		index <= '0;
 		internal_capture <= 1'b0;
 		internal_write <= 1'b0;
+		internal_any <= 1'b0;
 		internal_configured <= 1'b0;
 		internal_success <= 1'b0;
 		internal_fail <= 1'b0;
@@ -71,6 +74,7 @@ always_ff@(posedge clk or negedge rst_n) begin
 			compare_data <= compare_bit;
 			internal_capture <= capture;
 			internal_write <= write_config;
+			internal_any <= any_config && !write_config;
 			internal_configured <= 1'b1;
 			counter <= '0;
 			index <= '0;
@@ -85,7 +89,10 @@ always_ff@(posedge clk or negedge rst_n) begin
 				internal_push <= 1'b1;
 			end
 		end else if (enable && tick && !internal_success && !internal_fail) begin
-			if (input_bit == compare_data[position]) begin
+			if (internal_any || input_bit == compare_data[position]) begin
+				if (internal_any) begin
+					compare_data[position] <= input_bit;
+				end
 				counter <= counter + 1'b1;
 				index <= index + 1'b1;
 				if (counter + 1'b1 == internal_clock) begin

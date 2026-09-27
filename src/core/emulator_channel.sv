@@ -27,6 +27,7 @@ module emulator_channel #(
 	input logic cfg_write,
 	input logic [1:0] cfg_group,
 	input logic cfg_sr,
+	input logic cfg_any,
 	input logic cfg_follow,
 	input logic [15:0] cfg_main_cycles,
 	input logic cfg_wait_end,
@@ -87,6 +88,13 @@ logic line_free;
 logic listen;
 logic in_frame;
 logic frame_mark;
+logic discard;
+logic strict_tx;
+logic tx_mismatch;
+logic i2c_target;
+logic i2c_start;
+logic i2c_stop;
+logic tx_cancel;
 
 host_fifo #(
 	.depth(host_depth),
@@ -115,6 +123,7 @@ line_codec codec (
 	.in_frame(in_frame),
 	.frame_mark(frame_mark),
 	.halt(halt),
+	.tx_cancel(tx_cancel),
 	.tx_valid(tx_valid),
 	.tx_len(tx_len),
 	.tx_data(tx_data),
@@ -124,6 +133,11 @@ line_codec codec (
 	.tick(tick),
 	.end_tick(end_tick),
 	.code_error(code_error),
+	.strict_tx(strict_tx),
+	.tx_mismatch(tx_mismatch),
+	.i2c_target(i2c_target),
+	.i2c_start(i2c_start),
+	.i2c_stop(i2c_stop),
 	.data_out(data_out),
 	.data_oe(data_oe),
 	.pair_out(pair_out),
@@ -159,6 +173,7 @@ frame_chain #(
 	.cfg_write(cfg_write),
 	.cfg_group(cfg_group),
 	.cfg_sr(cfg_sr),
+	.cfg_any(cfg_any),
 	.cfg_follow(cfg_follow),
 	.cfg_main_cycles(cfg_main_cycles),
 	.cfg_wait_end(cfg_wait_end),
@@ -169,6 +184,12 @@ frame_chain #(
 	.cfg_invert(cfg_invert),
 	.cfg_error(cfg_error),
 	.tx_done(tx_done),
+	.discard(discard),
+	.strict_tx(strict_tx),
+	.tx_mismatch(tx_mismatch),
+	.i2c_target(i2c_target),
+	.i2c_start(i2c_start),
+	.i2c_stop(i2c_stop),
 	.out_rd_en(out_rd_en),
 	.host_pop(host_pop),
 	.out_data(out_data),
@@ -184,7 +205,8 @@ frame_chain #(
 	.line_free(line_free),
 	.listen(listen),
 	.armed(armed),
-	.in_frame(in_frame)
+	.in_frame(in_frame),
+	.tx_cancel(tx_cancel)
 );
 
 entry_dispatch dispatch (
@@ -196,6 +218,7 @@ entry_dispatch dispatch (
 	.out_wire(out_wire),
 	.tx_ready(tx_ready),
 	.host_ready(host_ready),
+	.flush(tx_cancel),
 	.out_rd_en(out_rd_en),
 	.tx_valid(tx_valid),
 	.tx_len(tx_len),
@@ -203,7 +226,8 @@ entry_dispatch dispatch (
 	.host_valid(host_valid),
 	.host_len(host_len),
 	.host_data(host_data),
-	.frame_mark(frame_mark)
+	.frame_mark(frame_mark),
+	.discard(discard)
 );
 
 endmodule

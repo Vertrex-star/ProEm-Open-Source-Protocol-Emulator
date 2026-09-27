@@ -19,6 +19,7 @@ module entry_dispatch (
 	input logic out_wire,
 	input logic tx_ready,
 	input logic host_ready,
+	input logic flush,
 
 	output logic out_rd_en,
 	output logic tx_valid,
@@ -27,30 +28,39 @@ module entry_dispatch (
 	output logic host_valid,
 	output logic [3:0] host_len,
 	output logic [7:0] host_data,
-	output logic frame_mark
+	output logic frame_mark,
+	output logic discard
 );
 
 logic reading;
 logic holding;
 logic routed;
 logic markSent;
+logic flushing;
 
 assign out_rd_en = !holding && !reading && !out_empty;
-assign tx_valid = holding && out_wire;
+assign tx_valid = holding && out_wire && !flushing;
+assign discard = holding && out_wire && flushing;
 assign host_valid = holding && !out_wire;
-assign routed = (tx_valid && tx_ready) || (host_valid && host_ready);
+assign routed = (tx_valid && tx_ready) || (host_valid && host_ready) || discard;
 
 always_ff @(posedge clk or negedge rst_n) begin
 	if (!rst_n) begin
 		reading <= 1'b0;
 		holding <= 1'b0;
 		markSent <= 1'b0;
+		flushing <= 1'b0;
 	end else begin
 		reading <= out_rd_en;
 		if (reading) begin
 			holding <= 1'b1;
 		end else if (routed) begin
 			holding <= 1'b0;
+		end
+		if (flush) begin
+			flushing <= 1'b1;
+		end else if (frame_mark) begin
+			flushing <= 1'b0;
 		end
 		if (routed) begin
 			markSent <= 1'b0;
