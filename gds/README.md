@@ -10,24 +10,25 @@ performance.
 | `tt_um_vertrex_star_proem.lef` | The block's outline and pin positions |
 | `images/` | Pictures of the layout (see [Images of the chip](#images-of-the-chip)) |
 
-The layout was built on 27 September 2026 with the Tiny Tapeout flow (LibreLane 3.0.5) on the
-IHP SG13G2 130 nm process, at 6 x 4 tiles and 50 MHz. It includes the branch unit, capture-any
-headers, I2C target mode and DATA streaming (ISA v0.5). It is a reference build: the Jane
-Street entry will be rebuilt on their CMOS5L template once they release it (see
-[Jane Street challenge](#jane-street-challenge)). The chip has not been fabricated yet.
+The layout was built on 28 September 2026 with the Tiny Tapeout CMOS5L flow (template branch
+`cmos5l`, LibreLane 3.1.0.dev3, IHP-Open-PDK `2bbec755`) on the IHP SG13CMOS5L 130 nm process,
+at 6 x 4 tiles and 50 MHz. This is the process and the size the Jane Street challenge uses, and
+it is the same flow the `gds` GitHub workflow runs on every push. The design includes the branch
+unit, capture-any headers, I2C target mode and DATA streaming (ISA v0.5). The chip has not been
+fabricated yet.
 
 ## Summary
 
 | | |
 | --- | --- |
 | Top module | `tt_um_vertrex_star_proem` |
-| Process | IHP SG13G2 130 nm (reference build) |
+| Process | IHP SG13CMOS5L 130 nm (Metal1 to Metal4 plus TopMetal1) |
 | Size | 6 x 4 Tiny Tapeout tiles; 1289.28 x 710.64 um |
-| Logic | 15,513 cells after synthesis; 20,037 after place and route |
+| Logic | 19,737 cells after place and route, not counting fill |
 | Space used | 35 % of the core area; the lower third of the die is free |
 | Clock | 50 MHz; timing met at every corner |
-| Power | About 9 mW at 50 MHz |
-| Checks | Magic DRC, KLayout DRC, LVS and the Tiny Tapeout precheck all pass |
+| Power | About 8.9 mW at 50 MHz |
+| Checks | Magic DRC 0 errors, LVS clean, Tiny Tapeout precheck pin, boundary and layer checks pass |
 
 ## Space
 
@@ -35,19 +36,19 @@ Street entry will be rebuilt on their CMOS5L template once they release it (see
 | --- | --- |
 | Die | 1289.28 x 710.64 um = 916,200 um² |
 | Core (area available for cells) | 902,417 um² |
-| Standard cells after place and route | 317,233 um² |
+| Standard cells after place and route | 314,561 um² |
 | Utilisation | 35 % |
 
 Where the cell area goes:
 
 | Cell class | Count | Area (um²) | Share |
 | --- | ---: | ---: | ---: |
-| Flip-flops | 2,406 | 117,867 | 37 % |
-| Combinational logic | 12,275 | 125,302 | 40 % |
-| Timing repair buffers (3,059 of them fix hold time) | 4,835 | 62,849 | 20 % |
-| Clock tree | 301 | 6,592 | 2 % |
-| Inverters, buffers, antenna diodes | 842 | 4,623 | 1 % |
-| **Total** | **20,659** | **317,233** | **100 %** |
+| Flip-flops | 2,400 | 117,573 | 37 % |
+| Combinational logic | 11,162 | 115,030 | 37 % |
+| Timing repair buffers (3,266 of them fix hold time) | 4,993 | 66,305 | 21 % |
+| Clock tree | 299 | 5,692 | 2 % |
+| Inverters, buffers, antenna diodes | 1,583 | 9,961 | 3 % |
+| **Total** | **20,437** | **314,561** | **100 %** |
 
 Main blocks (synthesis estimates):
 
@@ -61,15 +62,17 @@ Main blocks (synthesis estimates):
 | UART receiver with auto-baud | 7,700 |
 | Return path with UART transmitter | 5,300 |
 
-The design no longer fits 6 x 2 tiles comfortably (it would need about 85 % utilisation), and
-6 x 4 is the size the Jane Street challenge sets, so this build uses 6 x 4. About 60 % of the
-die is still free for future additions.
+Against the challenge's rough budget (24 tiles of about 200 x 150 um, about 1,000 cells per
+tile), the cells take about 0.31 mm² of the nominal 0.7 mm², and about 17,000 of the cells are
+logic; the rest are hold and repair buffers the flow adds.
 
 ## Jane Street challenge
 
 The [Jane Street protocol emulator ASIC competition](https://blog.janestreet.com/protocol-emulator-asic-competition/)
 (announced 10 September 2026; deadline 18 January 2027) asks for a chip that can speak real
-protocols, built on IHP's CMOS5L process through Tiny Tapeout at 6 x 4 tiles.
+protocols, built on IHP's CMOS5L process through Tiny Tapeout at 6 x 4 tiles. Entries start
+from the CMOS5L template, and the Tiny Tapeout GitHub Actions build the GDS and run the precheck;
+a submission needs a passing GDS build.
 
 | Challenge point | ProEm today |
 | --- | --- |
@@ -79,9 +82,9 @@ protocols, built on IHP's CMOS5L process through Tiny Tapeout at 6 x 4 tiles.
 | Extra | PS/2; SWD-style acknowledge handling; CAN-style arbitration; two channels at once; auto-baud host link |
 | Programmability | Frames described in instruction bytes, plus `BRANCH` rules that change a frame's direction or abort it from a received field or a read-back mismatch |
 | Area: 6 x 4 tiles | Fits at 35 % utilisation |
-| Process: CMOS5L | Same 84 standard cells as SG13G2, one fewer metal layer; no RTL change needed; rebuild once the template arrives |
-| Full RTL to GDS with timing closure | Done on SG13G2 (this folder) |
-| Verification | Pin-level tests for every standard; 1,800 random programs; 600 random branch programs; cocotb on RTL and gate level |
+| Process: CMOS5L | Built on the CMOS5L template; the `gds` workflow uses the same flow |
+| Full RTL to GDS with timing closure | Done (this folder); timing met at the slow, typical and fast corners |
+| Verification | Pin-level tests for every standard; 1,800 random programs; 600 random branch programs; cocotb on RTL and on the CMOS5L gate-level netlist |
 
 How it differs from the brief: the brief describes a tiny CPU running firmware. ProEm lets the
 host describe a frame (START, headers, MAIN, END), does line coding (NRZI, Manchester, bit
@@ -98,15 +101,14 @@ Estimated by OpenROAD on the routed layout with extracted wiring, at 50 MHz:
 
 | Corner | Flip-flops | Logic | Clock tree | Total |
 | --- | ---: | ---: | ---: | ---: |
-| Typical: 1.20 V, 25 °C | 6.48 mW | 0.34 mW | 2.24 mW | **9.1 mW** |
-| Slow: 1.08 V, 125 °C | 5.16 mW | 0.27 mW | 1.73 mW | 7.2 mW |
-| Fast: 1.32 V, -40 °C | 7.89 mW | 0.43 mW | 2.94 mW | 11.3 mW |
+| Typical: 1.20 V, 25 °C | 6.43 mW | 0.31 mW | 2.12 mW | **8.9 mW** |
+| Slow: 1.08 V, 125 °C | 5.12 mW | 0.25 mW | 1.64 mW | 7.0 mW |
+| Fast: 1.32 V, -40 °C | 7.84 mW | 0.40 mW | 2.78 mW | 11.0 mW |
 
-* About 7.5 mA from the 1.2 V core supply; leakage is about 0.04 mW.
-* About 96 % of the power is the clock reaching the 2,406 flip-flops; the logic itself uses
+* About 7.4 mA from the 1.2 V core supply; leakage is about 0.04 mW.
+* About 96 % of the power is the clock reaching the 2,400 flip-flops; the logic itself uses
   about 4 %. Idle and busy power are therefore nearly the same.
 * Heat: well under 1 °C of self-heating in a normal package; no cooling concerns.
-* Power grid: worst voltage drop 0.48 mV on VPWR and 1.2 mV on VGND.
 * This is a vectorless estimate (default switching rates). A vector-based estimate from the
   gate-level tests, or a current measurement on the real chip, would refine it.
 
@@ -116,14 +118,15 @@ Timing after routing, with extracted wiring, at a 50 MHz (20 ns) clock:
 
 | Corner | Setup slack | Hold slack | Maximum clock |
 | --- | ---: | ---: | ---: |
-| Typical: 1.20 V, 25 °C | 8.8 ns | 0.31 ns | 89 MHz |
-| Slow: 1.08 V, 125 °C | 2.3 ns | 0.64 ns | 57 MHz |
-| Fast: 1.32 V, -40 °C | 12.7 ns | 0.12 ns | 136 MHz |
+| Typical: 1.20 V, 25 °C | 8.9 ns | 0.28 ns | 90 MHz |
+| Slow: 1.08 V, 125 °C | 2.6 ns | 0.61 ns | 57 MHz |
+| Fast: 1.32 V, -40 °C | 12.5 ns | 0.11 ns | 133 MHz |
 
-0 setup and hold violations at every corner. The slow corner shows 9 slew warnings, each within
-0.08 ns of the 2.5 ns limit; the flow reports them but does not treat them as errors. The
-margin is smaller than in the earlier 6 x 2 build (5.9 ns) because the larger die spreads the
-cells out.
+0 setup, hold and slew violations at every corner. The CMOS5L flow only enforces the typical
+corner; with the template's default settings the slow corner missed by 1.2 ns because some long
+wires were driven by the smallest cells. `src/config.json` therefore limits signal transitions
+to 0.75 ns and gives the resizer a 1 ns setup margin, which closes the slow corner with 2.6 ns
+to spare.
 
 Protocol speeds at 50 MHz:
 
@@ -151,11 +154,11 @@ speed limits for the shuttle have not been checked.
 | Verilator lint | 0 errors |
 | Detailed routing | 0 violations |
 | Antenna | 0 violations |
+| Setup, hold and slew | 0 violations at the slow, typical and fast corners |
 | Magic DRC | 0 errors |
-| KLayout DRC (IHP SG13G2 rule deck) | 0 errors |
 | LVS (layout matches the netlist) | Clean |
-| Tiny Tapeout precheck | Passed |
-| cocotb, gate level (routed netlist) | 4 of 4 passed |
+| Tiny Tapeout precheck | Pin, boundary, layer, cell name and label checks pass; the full KLayout CMOS5L DRC takes hours on a small machine and is confirmed by the `gds` workflow |
+| cocotb, gate level (CMOS5L netlist and cell models, Icarus 13 as in the CI) | 4 of 4 passed |
 | cocotb, RTL | 4 of 4 passed |
 
 ## Images of the chip
@@ -167,10 +170,9 @@ has not been made yet.
 
 ![Whole layout, 6 x 4 tiles](images/layout_full.png)
 
-1289 x 711 um. Red and blue are the lower metal layers inside and between the cells; yellow and
-green are the upper routing layers; the regular vertical stripes are the power straps. The logic
-fills the upper part of the die; the plain area below is filler cells, free for future
-additions.
+1289 x 711 um. Red is the lowest routing metal; yellow and green are the upper routing layers;
+the regular green vertical stripes are the power straps. The logic fills the upper part of the
+die; the plain area below is filler cells, free for future additions.
 
 ### Close-up
 
@@ -189,7 +191,7 @@ The same layout rendered the way the Tiny Tapeout website shows projects.
 
 1. Install KLayout from <https://www.klayout.de/build.html>.
 2. File, Open, and choose `tt_um_vertrex_star_proem.gds`.
-3. For IHP layer names and colours: File, Load Layer Properties, and choose `sg13g2.lyp` from
-   `ihp-sg13g2/libs.tech/klayout/tech/` in the
+3. For IHP layer names and colours: File, Load Layer Properties, and choose `sg13cmos5l.lyp` from
+   `ihp-sg13cmos5l/libs.tech/klayout/tech/` in the
    [IHP Open PDK](https://github.com/IHP-GmbH/IHP-Open-PDK).
 4. Press `*` to show the inside of every cell.

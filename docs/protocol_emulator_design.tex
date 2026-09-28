@@ -42,14 +42,14 @@
 \begin{center}
 \begin{tabular}{@{}ll@{}}
 \toprule
-Process & IHP 130\,nm, through Tiny Tapeout (6 $\times$ 4 tiles) \\
+Process & IHP SG13CMOS5L 130\,nm, through Tiny Tapeout (6 $\times$ 4 tiles) \\
 System clock & 50\,MHz (10BASE-T transmit needs 40 or 60\,MHz) \\
 Channels & 2 independent protocol channels, A and B \\
 Host link & UART in (auto-baud), UART out (rate set by \sig{LINK}) \\
 Standards verified & UART, SPI (controller and target), I\textsuperscript{2}C (controller and target), PS/2, \\
  & 10BASE-T receive, Manchester transmit, USB low speed receive and transmit, \\
  & SWD-style acknowledge handling, CAN-style arbitration \\
-Logic & 15,513 cells after synthesis, 20,037 after place and route (35\,\% utilisation) \\
+Logic & 15,513 cells after synthesis, 19,737 after place and route (35\,\% utilisation) \\
 Timing & closed after routing: 17.7\,ns worst path at 1.08\,V, 125\,$^\circ$C (20\,ns budget) \\
 Instruction set & ISA v0.5 (separate document: \emph{ProEm Instruction Set}) \\
 \bottomrule
@@ -410,18 +410,18 @@ The worst path before layout runs inside MAIN: bit counter, length compare, fram
 
 \subsection{Place and route on Tiny Tapeout}
 
-The design was hardened with the flow the Tiny Tapeout \sig{gds} workflow runs: LibreLane 3.0.5, the IHP SG13G2 PDK at the commit the shuttle pins, and the default \sig{src/config.json} (target density 60\,\%, 20\,ns clock), at the 6 $\times$ 4 tiles the Jane Street challenge sets. Timing is from the routed design with extracted parasitics. The CMOS5L build for the challenge will follow once Jane Street release their template.
+The design was hardened on the Tiny Tapeout CMOS5L template (the \sig{cmos5l} branch of the IHP template) with the flow its \sig{gds} workflow runs: LibreLane 3.1.0.dev3 and the IHP SG13CMOS5L PDK at the commit the workflow installs, at the 6 $\times$ 4 tiles the Jane Street challenge sets. \sig{src/config.json} keeps the template's settings (target density 60\,\%, 20\,ns clock) and adds a 0.75\,ns limit on signal transitions and a larger resizer setup margin (see below). Timing is from the routed design with extracted parasitics.
 
 \begin{center}
 \begin{tabular}{@{}ll@{}}
 \toprule
 Tiles & 6 $\times$ 4, 1289.28 $\times$ 710.64\,$\mu$m \\
-Cells & 15,513 after synthesis; 20,037 after place and route, not counting fill \\
- & (3,059 hold buffers, 301 clock tree cells, repair buffers) \\
+Cells & 15,513 after synthesis; 19,737 after place and route, not counting fill \\
+ & (3,266 hold buffers, 299 clock tree cells, repair buffers) \\
 Utilisation & 35\,\% of the core area \\
 Routing & 0 violations after detailed routing, 0 antenna violations \\
-Sign-off & Magic DRC and KLayout IHP DRC 0 errors; LVS clean; Tiny Tapeout precheck passed \\
-Wire length & 763\,mm \\
+Sign-off & Magic DRC 0 errors; LVS clean; precheck pin, boundary and layer checks passed \\
+Wire length & 851\,mm \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -431,14 +431,14 @@ Wire length & 763\,mm \\
 \toprule
 Corner & Setup slack at 50\,MHz & Hold slack & Maximum clock \\
 \midrule
-Typical, 1.2\,V, 25\,$^\circ$C & 8.8\,ns & 0.31\,ns & 89\,MHz \\
-Slow, 1.08\,V, 125\,$^\circ$C & 2.3\,ns & 0.64\,ns & 57\,MHz \\
-Fast, 1.32\,V, $-40\,^\circ$C & 12.7\,ns & 0.12\,ns & 136\,MHz \\
+Typical, 1.2\,V, 25\,$^\circ$C & 8.9\,ns & 0.28\,ns & 90\,MHz \\
+Slow, 1.08\,V, 125\,$^\circ$C & 2.6\,ns & 0.61\,ns & 57\,MHz \\
+Fast, 1.32\,V, $-40\,^\circ$C & 12.5\,ns & 0.11\,ns & 133\,MHz \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-The worst path after routing starts at the frame buffer's read pointer. The margin is smaller than in the 6 $\times$ 2 build before the branch unit (5.9\,ns), mostly because the larger die spreads the cells and lengthens the wires; the slow corner also shows 9 slew warnings, each within 0.08\,ns of the 2.5\,ns limit, which the flow reports but does not treat as errors. A build with 75\,\% placement density improved the pre-route slack by 0.8\,ns but was much harder to route, so the default setting is kept. 60\,MHz for 10BASE-T transmit now meets timing at the typical corner only. The run on GitHub is the one used for submission.
+The CMOS5L flow only enforces timing at the typical corner. With the template's default settings the slow corner missed by 1.2\,ns: the resizer had left some long wires driven by the smallest cells, with transitions over 2\,ns. Limiting transitions to 0.75\,ns (\sig{MAX\_TRANSITION\_CONSTRAINT}) and raising the resizer setup margins to 1.0\,ns and 0.5\,ns closes every corner, at the cost of about 100 extra cells. Power is about 8.9\,mW at the typical corner (7.0\,mW slow, 11.0\,mW fast), almost all of it the clock reaching the 2,400 flip-flops. 60\,MHz for 10BASE-T transmit meets timing at the typical and fast corners only. The run on GitHub is the one used for submission.
 
 \begin{center}
 \includegraphics[width=\linewidth]{layout_full.png}\\[2pt]
@@ -474,7 +474,7 @@ The \sig{PIN} fields count the \sig{uio} pads. Every pad is read back through \s
 \item \textbf{Return link bandwidth.} Two bytes per host entry. At 4 clocks per bit the link keeps up with USB low speed and the clocked standards. Full-size 10BASE-T frames (64 bytes and more) arrive faster; they are received but overflow the 16-entry buffer and are reported with the overflow flag.
 \item \textbf{Feeding fixed-timing lines.} \sig{DATA} streams during a frame, so packet length is no longer limited by the 8-entry host FIFO, but each entry costs 140 clocks on the instruction link at 7 clocks per bit. UART transmit keeps up to about 1.2\,Mbaud; faster fixed-timing lines must be preloaded (8 entries) or end with an underrun.
 \item \textbf{Head-of-line blocking.} A host entry waiting for the return link holds up the wire entries behind it. I\textsuperscript{2}C just stretches SCL; a timed transmit would pause.
-\item \textbf{Manchester limits.} Receive needs at least 5 clocks per bit (50\,MHz for 10BASE-T); transmit needs an even divider (40 or 60\,MHz), and 60\,MHz meets timing only at the typical corner in the current layout.
+\item \textbf{Manchester limits.} Receive needs at least 5 clocks per bit (50\,MHz for 10BASE-T); transmit needs an even divider (40 or 60\,MHz), and 60\,MHz meets timing at the typical and fast corners but not the slow one.
 \item \textbf{Not supported yet.} CRC generation on chip; clock stretching as an I\textsuperscript{2}C target; CAN bit stuffing is in the codec but untested; a \emph{loop} action for \sig{BRANCH} (repeat a block without the host).
 \item \textbf{I\textsuperscript{2}C target speed.} Tested up to 1\,MHz SCL. Faster, the ACK after a repeated START can be late, because the previous frame's status entry must first reach the return link (head-of-line blocking).
 \item \textbf{Reset.} \sig{CLEAR} resets a channel through its asynchronous reset (\sig{rst\_n \&\& !clear}), driven from a control-unit flip-flop.

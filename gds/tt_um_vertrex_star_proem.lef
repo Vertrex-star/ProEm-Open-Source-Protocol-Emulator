@@ -11,278 +11,222 @@ MACRO tt_um_vertrex_star_proem
     DIRECTION INOUT ;
     USE GROUND ;
     PORT
-      LAYER TopMetal1 ;
-        RECT 21.580 3.150 23.780 707.490 ;
+      LAYER Metal4 ;
+        RECT 15.930 3.560 18.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 60.450 3.150 62.650 707.490 ;
+      LAYER Metal4 ;
+        RECT 65.930 3.560 68.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 99.320 3.150 101.520 707.490 ;
+      LAYER Metal4 ;
+        RECT 115.930 3.560 118.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 138.190 3.150 140.390 707.490 ;
+      LAYER Metal4 ;
+        RECT 165.930 3.560 168.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 177.060 3.150 179.260 707.490 ;
+      LAYER Metal4 ;
+        RECT 215.930 3.560 218.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 215.930 3.150 218.130 707.490 ;
+      LAYER Metal4 ;
+        RECT 265.930 3.560 268.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 254.800 3.150 257.000 707.490 ;
+      LAYER Metal4 ;
+        RECT 315.930 3.560 318.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 293.670 3.150 295.870 707.490 ;
+      LAYER Metal4 ;
+        RECT 365.930 3.560 368.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 332.540 3.150 334.740 707.490 ;
+      LAYER Metal4 ;
+        RECT 415.930 3.560 418.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 371.410 3.150 373.610 707.490 ;
+      LAYER Metal4 ;
+        RECT 465.930 3.560 468.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 410.280 3.150 412.480 707.490 ;
+      LAYER Metal4 ;
+        RECT 515.930 3.560 518.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 449.150 3.150 451.350 707.490 ;
+      LAYER Metal4 ;
+        RECT 565.930 3.560 568.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 488.020 3.150 490.220 707.490 ;
+      LAYER Metal4 ;
+        RECT 615.930 3.560 618.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 526.890 3.150 529.090 707.490 ;
+      LAYER Metal4 ;
+        RECT 665.930 3.560 668.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 565.760 3.150 567.960 707.490 ;
+      LAYER Metal4 ;
+        RECT 715.930 3.560 718.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 604.630 3.150 606.830 707.490 ;
+      LAYER Metal4 ;
+        RECT 765.930 3.560 768.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 643.500 3.150 645.700 707.490 ;
+      LAYER Metal4 ;
+        RECT 815.930 3.560 818.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 682.370 3.150 684.570 707.490 ;
+      LAYER Metal4 ;
+        RECT 865.930 3.560 868.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 721.240 3.150 723.440 707.490 ;
+      LAYER Metal4 ;
+        RECT 915.930 3.560 918.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 760.110 3.150 762.310 707.490 ;
+      LAYER Metal4 ;
+        RECT 965.930 3.560 968.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 798.980 3.150 801.180 707.490 ;
+      LAYER Metal4 ;
+        RECT 1015.930 3.560 1018.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 837.850 3.150 840.050 707.490 ;
+      LAYER Metal4 ;
+        RECT 1065.930 3.560 1068.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 876.720 3.150 878.920 707.490 ;
+      LAYER Metal4 ;
+        RECT 1115.930 3.560 1118.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 915.590 3.150 917.790 707.490 ;
+      LAYER Metal4 ;
+        RECT 1165.930 3.560 1168.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 954.460 3.150 956.660 707.490 ;
+      LAYER Metal4 ;
+        RECT 1215.930 3.560 1218.030 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 993.330 3.150 995.530 707.490 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1032.200 3.150 1034.400 707.490 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1071.070 3.150 1073.270 707.490 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1109.940 3.150 1112.140 707.490 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1148.810 3.150 1151.010 707.490 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1187.680 3.150 1189.880 707.490 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1226.550 3.150 1228.750 707.490 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1265.420 3.150 1267.620 707.490 ;
+      LAYER Metal4 ;
+        RECT 1265.930 3.560 1268.030 707.080 ;
     END
   END VGND
   PIN VPWR
     DIRECTION INOUT ;
     USE POWER ;
     PORT
-      LAYER TopMetal1 ;
-        RECT 15.380 3.560 17.580 707.080 ;
+      LAYER Metal4 ;
+        RECT 11.830 3.560 13.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 54.250 3.560 56.450 707.080 ;
+      LAYER Metal4 ;
+        RECT 61.830 3.560 63.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 93.120 3.560 95.320 707.080 ;
+      LAYER Metal4 ;
+        RECT 111.830 3.560 113.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 131.990 3.560 134.190 707.080 ;
+      LAYER Metal4 ;
+        RECT 161.830 3.560 163.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 170.860 3.560 173.060 707.080 ;
+      LAYER Metal4 ;
+        RECT 211.830 3.560 213.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 209.730 3.560 211.930 707.080 ;
+      LAYER Metal4 ;
+        RECT 261.830 3.560 263.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 248.600 3.560 250.800 707.080 ;
+      LAYER Metal4 ;
+        RECT 311.830 3.560 313.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 287.470 3.560 289.670 707.080 ;
+      LAYER Metal4 ;
+        RECT 361.830 3.560 363.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 326.340 3.560 328.540 707.080 ;
+      LAYER Metal4 ;
+        RECT 411.830 3.560 413.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 365.210 3.560 367.410 707.080 ;
+      LAYER Metal4 ;
+        RECT 461.830 3.560 463.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 404.080 3.560 406.280 707.080 ;
+      LAYER Metal4 ;
+        RECT 511.830 3.560 513.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 442.950 3.560 445.150 707.080 ;
+      LAYER Metal4 ;
+        RECT 561.830 3.560 563.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 481.820 3.560 484.020 707.080 ;
+      LAYER Metal4 ;
+        RECT 611.830 3.560 613.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 520.690 3.560 522.890 707.080 ;
+      LAYER Metal4 ;
+        RECT 661.830 3.560 663.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 559.560 3.560 561.760 707.080 ;
+      LAYER Metal4 ;
+        RECT 711.830 3.560 713.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 598.430 3.560 600.630 707.080 ;
+      LAYER Metal4 ;
+        RECT 761.830 3.560 763.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 637.300 3.560 639.500 707.080 ;
+      LAYER Metal4 ;
+        RECT 811.830 3.560 813.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 676.170 3.560 678.370 707.080 ;
+      LAYER Metal4 ;
+        RECT 861.830 3.560 863.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 715.040 3.560 717.240 707.080 ;
+      LAYER Metal4 ;
+        RECT 911.830 3.560 913.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 753.910 3.560 756.110 707.080 ;
+      LAYER Metal4 ;
+        RECT 961.830 3.560 963.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 792.780 3.560 794.980 707.080 ;
+      LAYER Metal4 ;
+        RECT 1011.830 3.560 1013.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 831.650 3.560 833.850 707.080 ;
+      LAYER Metal4 ;
+        RECT 1061.830 3.560 1063.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 870.520 3.560 872.720 707.080 ;
+      LAYER Metal4 ;
+        RECT 1111.830 3.560 1113.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 909.390 3.560 911.590 707.080 ;
+      LAYER Metal4 ;
+        RECT 1161.830 3.560 1163.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 948.260 3.560 950.460 707.080 ;
+      LAYER Metal4 ;
+        RECT 1211.830 3.560 1213.930 707.080 ;
     END
     PORT
-      LAYER TopMetal1 ;
-        RECT 987.130 3.560 989.330 707.080 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1026.000 3.560 1028.200 707.080 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1064.870 3.560 1067.070 707.080 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1103.740 3.560 1105.940 707.080 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1142.610 3.560 1144.810 707.080 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1181.480 3.560 1183.680 707.080 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1220.350 3.560 1222.550 707.080 ;
-    END
-    PORT
-      LAYER TopMetal1 ;
-        RECT 1259.220 3.560 1261.420 707.080 ;
+      LAYER Metal4 ;
+        RECT 1261.830 3.560 1263.930 707.080 ;
     END
   END VPWR
   PIN clk
     DIRECTION INPUT ;
     USE SIGNAL ;
-    ANTENNAGATEAREA 1.450800 ;
+    ANTENNAGATEAREA 0.725400 ;
     PORT
       LAYER Metal4 ;
         RECT 187.050 709.640 187.350 710.640 ;
@@ -607,7 +551,7 @@ MACRO tt_um_vertrex_star_proem
   PIN uo_out[2]
     DIRECTION OUTPUT ;
     USE SIGNAL ;
-    ANTENNADIFFAREA 0.708600 ;
+    ANTENNADIFFAREA 2.827200 ;
     PORT
       LAYER Metal4 ;
         RECT 110.250 709.640 110.550 710.640 ;
@@ -664,11 +608,11 @@ MACRO tt_um_vertrex_star_proem
       LAYER Metal1 ;
         RECT 2.880 3.560 1286.400 707.080 ;
       LAYER Metal2 ;
-        RECT 3.255 3.635 1281.705 707.005 ;
+        RECT 3.255 3.635 1286.025 707.845 ;
       LAYER Metal3 ;
-        RECT 3.215 3.680 1281.745 706.960 ;
+        RECT 3.060 3.680 1286.065 707.805 ;
       LAYER Metal4 ;
-        RECT 15.560 709.430 29.400 709.640 ;
+        RECT 7.100 709.430 29.400 709.640 ;
         RECT 30.120 709.430 33.240 709.640 ;
         RECT 33.960 709.430 37.080 709.640 ;
         RECT 37.800 709.430 40.920 709.640 ;
@@ -711,30 +655,60 @@ MACRO tt_um_vertrex_star_proem
         RECT 179.880 709.430 183.000 709.640 ;
         RECT 183.720 709.430 186.840 709.640 ;
         RECT 187.560 709.430 190.680 709.640 ;
-        RECT 191.400 709.430 1267.440 709.640 ;
-        RECT 15.560 3.635 1267.440 709.430 ;
-      LAYER Metal5 ;
-        RECT 15.515 3.470 1267.485 707.170 ;
-      LAYER TopMetal1 ;
-        RECT 423.940 320.480 441.310 555.220 ;
-        RECT 446.790 320.480 447.510 555.220 ;
-        RECT 452.990 320.480 480.180 555.220 ;
-        RECT 485.660 320.480 486.380 555.220 ;
-        RECT 491.860 320.480 519.050 555.220 ;
-        RECT 524.530 320.480 525.250 555.220 ;
-        RECT 530.730 320.480 557.920 555.220 ;
-        RECT 563.400 320.480 564.120 555.220 ;
-        RECT 569.600 320.480 596.790 555.220 ;
-        RECT 602.270 320.480 602.990 555.220 ;
-        RECT 608.470 320.480 635.660 555.220 ;
-        RECT 641.140 320.480 641.860 555.220 ;
-        RECT 647.340 320.480 674.530 555.220 ;
-        RECT 680.010 320.480 680.730 555.220 ;
-        RECT 686.210 320.480 713.400 555.220 ;
-        RECT 718.880 320.480 719.600 555.220 ;
-        RECT 725.080 320.480 752.270 555.220 ;
-        RECT 757.750 320.480 758.470 555.220 ;
-        RECT 763.950 320.480 783.100 555.220 ;
+        RECT 191.400 709.430 1265.380 709.640 ;
+        RECT 7.100 707.290 1265.380 709.430 ;
+        RECT 7.100 213.215 11.620 707.290 ;
+        RECT 14.140 213.215 15.720 707.290 ;
+        RECT 18.240 213.215 61.620 707.290 ;
+        RECT 64.140 213.215 65.720 707.290 ;
+        RECT 68.240 213.215 111.620 707.290 ;
+        RECT 114.140 213.215 115.720 707.290 ;
+        RECT 118.240 213.215 161.620 707.290 ;
+        RECT 164.140 213.215 165.720 707.290 ;
+        RECT 168.240 213.215 211.620 707.290 ;
+        RECT 214.140 213.215 215.720 707.290 ;
+        RECT 218.240 213.215 261.620 707.290 ;
+        RECT 264.140 213.215 265.720 707.290 ;
+        RECT 268.240 213.215 311.620 707.290 ;
+        RECT 314.140 213.215 315.720 707.290 ;
+        RECT 318.240 213.215 361.620 707.290 ;
+        RECT 364.140 213.215 365.720 707.290 ;
+        RECT 368.240 213.215 411.620 707.290 ;
+        RECT 414.140 213.215 415.720 707.290 ;
+        RECT 418.240 213.215 461.620 707.290 ;
+        RECT 464.140 213.215 465.720 707.290 ;
+        RECT 468.240 213.215 511.620 707.290 ;
+        RECT 514.140 213.215 515.720 707.290 ;
+        RECT 518.240 213.215 561.620 707.290 ;
+        RECT 564.140 213.215 565.720 707.290 ;
+        RECT 568.240 213.215 611.620 707.290 ;
+        RECT 614.140 213.215 615.720 707.290 ;
+        RECT 618.240 213.215 661.620 707.290 ;
+        RECT 664.140 213.215 665.720 707.290 ;
+        RECT 668.240 213.215 711.620 707.290 ;
+        RECT 714.140 213.215 715.720 707.290 ;
+        RECT 718.240 213.215 761.620 707.290 ;
+        RECT 764.140 213.215 765.720 707.290 ;
+        RECT 768.240 213.215 811.620 707.290 ;
+        RECT 814.140 213.215 815.720 707.290 ;
+        RECT 818.240 213.215 861.620 707.290 ;
+        RECT 864.140 213.215 865.720 707.290 ;
+        RECT 868.240 213.215 911.620 707.290 ;
+        RECT 914.140 213.215 915.720 707.290 ;
+        RECT 918.240 213.215 961.620 707.290 ;
+        RECT 964.140 213.215 965.720 707.290 ;
+        RECT 968.240 213.215 1011.620 707.290 ;
+        RECT 1014.140 213.215 1015.720 707.290 ;
+        RECT 1018.240 213.215 1061.620 707.290 ;
+        RECT 1064.140 213.215 1065.720 707.290 ;
+        RECT 1068.240 213.215 1111.620 707.290 ;
+        RECT 1114.140 213.215 1115.720 707.290 ;
+        RECT 1118.240 213.215 1161.620 707.290 ;
+        RECT 1164.140 213.215 1165.720 707.290 ;
+        RECT 1168.240 213.215 1211.620 707.290 ;
+        RECT 1214.140 213.215 1215.720 707.290 ;
+        RECT 1218.240 213.215 1261.620 707.290 ;
+        RECT 1264.140 213.215 1265.380 707.290 ;
   END
 END tt_um_vertrex_star_proem
 END LIBRARY

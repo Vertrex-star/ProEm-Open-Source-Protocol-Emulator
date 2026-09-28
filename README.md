@@ -4,7 +4,7 @@ ProEm is an open-source protocol emulator ASIC: a chip that lets an RP2040 speak
 hardware. The RP2040 describes a frame in a few instruction bytes; the chip runs it at up to one
 bit per clock, with exact timing, and sends back what it received plus a status for every frame.
 
-Target: IHP 130 nm through [Tiny Tapeout](https://tinytapeout.com) (6 × 4 tiles, as the Jane Street challenge sets), 50 MHz.
+Target: IHP SG13CMOS5L 130 nm through [Tiny Tapeout](https://tinytapeout.com) (6 × 4 tiles, as the Jane Street challenge sets), 50 MHz.
 Top module for Tiny Tapeout: `tt_um_vertrex_star_proem`.
 Built for the [Jane Street protocol emulator ASIC competition](https://blog.janestreet.com/protocol-emulator-asic-competition/).
 
@@ -19,8 +19,8 @@ Built for the [Jane Street protocol emulator ASIC competition](https://blog.jane
 | Verified at pin level | UART, SPI (controller and target), I2C controller and target, PS/2, 10BASE-T receive, Manchester transmit, USB low speed receive and transmit, SWD-style acknowledge handling, CAN-style arbitration |
 | Reacting on chip | `BRANCH` rules change a frame's direction, or abort it, from a field just received or from the line not reading back what the chip drove |
 | Long packets | `DATA` streams while a frame runs; fixed-timing lines report an underrun if the data runs out |
-| Logic | 15,513 cells after synthesis, 20,037 after place and route (35 % of the 6 × 4 core area) |
-| Timing | Closed after routing at all three corners: 17.7 ns worst path at 1.08 V, 125 °C (20 ns budget) |
+| Logic | 15,513 cells after synthesis, 19,737 after place and route (35 % of the 6 × 4 core area) |
+| Timing | Closed after routing at all three corners on CMOS5L: 17.4 ns worst path at 1.08 V, 125 °C (20 ns budget) |
 | Instruction set | ISA v0.5, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
 
 ## How it works
@@ -91,10 +91,12 @@ the hierarchy, submodules, author, and a description line.
 
 ## Tiny Tapeout
 
-The chip is packaged as a Tiny Tapeout project for the IHP SG13G2 shuttle (`info.yaml`,
-`src/config.json`, top module `tt_um_vertrex_star_proem`). Every push runs the `gds` workflow,
-which builds the layout with LibreLane, runs the Tiny Tapeout precheck and the cocotb test on the
-gate-level netlist, and publishes a 3D viewer.
+The chip is packaged as a Tiny Tapeout project on the CMOS5L template (the `cmos5l` branch of
+Tiny Tapeout's IHP template), as the Jane Street challenge asks (`info.yaml`, `src/config.json`,
+top module `tt_um_vertrex_star_proem`). Every push runs the `gds` workflow, which builds the
+layout for IHP SG13CMOS5L with LibreLane, runs the Tiny Tapeout precheck and the cocotb test on
+the gate-level netlist, and publishes a 3D viewer. A green `gds` run is what the challenge
+needs for a submission.
 
 ### Pin map
 
@@ -121,24 +123,26 @@ lines (I2C, USB) work on a single pad. A channel only drives its pads when `OUT`
 The GDS file, pictures of the layout and a summary of space, power, performance and the Jane Street
 challenge are in [gds/](gds/README.md).
 
-Hardened locally with the same flow the `gds` workflow uses (LibreLane 3.0.5, IHP SG13G2 PDK at the
-commit the shuttle pins, `src/config.json` unchanged), at the 6 × 4 tiles the Jane Street
-challenge sets:
+Hardened locally with the same flow the `gds` workflow uses (template branch `cmos5l`,
+LibreLane 3.1.0.dev3, IHP-Open-PDK at the commit the workflow installs), at the 6 × 4 tiles the
+Jane Street challenge sets:
 
 | | |
 | --- | --- |
+| Process | IHP SG13CMOS5L 130 nm |
 | Tiles | 6 × 4, 1289.28 × 710.64 µm |
-| Cells | 15,513 after synthesis; 20,037 after place and route, not counting fill (includes 3,059 hold buffers and 301 clock tree cells) |
+| Cells | 15,513 after synthesis; 19,737 after place and route, not counting fill (includes 3,266 hold buffers and 299 clock tree cells) |
 | Utilisation | 35 % of the core area; the lower third of the die is free |
 | Routing | 0 violations after detailed routing, 0 antenna violations |
-| Sign-off checks | Magic DRC 0 errors, KLayout IHP DRC 0 errors, LVS clean, Tiny Tapeout precheck passed; cocotb gate-level tests 4 of 4 pass |
-| Setup slack at 50 MHz | 8.8 ns typical, 2.3 ns slow (1.08 V, 125 °C), 12.7 ns fast |
-| Hold slack | 0.31 ns typical, 0.64 ns slow, 0.12 ns fast |
-| Maximum clock | 57 MHz at the slow corner, 89 MHz typical |
-| Power | about 9 mW at 50 MHz (7.2 to 11.3 mW across corners) |
+| Sign-off checks | Magic DRC 0 errors, LVS clean, Tiny Tapeout precheck pin, boundary and layer checks passed (the full KLayout DRC runs in the `gds` workflow); cocotb gate-level tests 4 of 4 pass |
+| Setup slack at 50 MHz | 8.9 ns typical, 2.6 ns slow (1.08 V, 125 °C), 12.5 ns fast |
+| Hold slack | 0.28 ns typical, 0.61 ns slow, 0.11 ns fast |
+| Maximum clock | 57 MHz at the slow corner, 90 MHz typical |
+| Power | about 8.9 mW at 50 MHz (7.0 to 11.0 mW across corners) |
 
-The Jane Street entry itself will be rebuilt on their CMOS5L template. The GitHub run is the one
-that counts for submission.
+The CMOS5L flow only checks timing at the typical corner. With the template's default settings
+the slow corner missed by 1.2 ns, so `src/config.json` limits signal transitions to 0.75 ns
+(`MAX_TRANSITION_CONSTRAINT`) and gives the resizer more setup margin; every corner now passes.
 
 ### Running the cocotb test
 
@@ -156,8 +160,8 @@ Needs Linux, macOS or WSL on Windows, with `g++`, Python 3 and Yosys:
 pip install yowasp-yosys          # or install Yosys from your package manager
 bash scripts/run.sh               # every test, then synthesis
 SKIP_SYNTH=1 bash scripts/run.sh  # tests only
-LIBERTY=path/to/sg13g2_stdcell_typ.lib bash scripts/run.sh                       # area in IHP cells
-LIBERTY=path/to/sg13g2_stdcell_slow_1p08V_125C.lib bash scripts/sta.sh           # timing
+LIBERTY=path/to/sg13cmos5l_stdcell_typ_1p20V_25C.lib bash scripts/run.sh             # area in IHP cells
+LIBERTY=path/to/sg13cmos5l_stdcell_slow_1p08V_125C.lib bash scripts/sta.sh           # timing
 ```
 
 Every test resets the chip, sends `0x55` for auto-baud, programs it with instruction bytes on
@@ -189,11 +193,11 @@ python docs/diagram/make_diagram.py      # writes docs/protocol_emulator_archite
 
 ## Status and limits
 
-All tests pass, and the design places, routes and meets timing on 6 × 4 Tiny Tapeout tiles.
+All tests pass, and the design places, routes and meets timing on 6 × 4 Tiny Tapeout tiles on
+the CMOS5L template.
 Known limits are listed in the design reference; the main ones are the return link bandwidth
 (full-size Ethernet frames overflow and are reported), the instruction link rate when feeding
-fast fixed-timing lines, and no CRC generation on chip. Still to do: the CMOS5L build once Jane
-Street release their template, formal proofs, and a Quartus compile (so far checked with Yosys,
+fast fixed-timing lines, and no CRC generation on chip. Still to do: formal proofs, and a Quartus compile (so far checked with Yosys,
 Verilator and Icarus).
 
 ## Licence
