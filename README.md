@@ -43,6 +43,31 @@ Built for the [Jane Street protocol emulator ASIC competition](https://blog.jane
 The [design reference](docs/protocol_emulator_design.pdf) explains every block and gives the exact
 instruction bytes for each standard.
 
+## Using the chip
+
+A host (an RP2040, or a PC through a USB-UART adapter) drives ProEm over one serial line:
+
+1. Connect the host's TX to `ui[0]` and RX to `uo[0]`. The protocol lines are `uio[0]` to
+   `uio[2]` for channel A and `uio[3]` to `uio[5]` for channel B.
+2. After reset, send `0x55` once; the chip learns the host's baud rate from it.
+3. Program a channel: line coding, clock, pin drive, and the frame's shape (START, headers,
+   MAIN, END). The settings stay until they are rewritten.
+4. Queue the payload with `DATA` and start with `RUN`. Fixed parts of a frame (addresses,
+   commands, sync patterns) come from the program; only the payload changes per frame.
+5. Read the results on `uo[0]`: received data, and one status byte per frame.
+
+[host/](host/README.md) has a Python library that builds the instruction bytes and decodes the
+replies, with a worked UART transmit example. For example, sending `A0000` at 115200 baud on
+channel A:
+
+```python
+import proem_host as ph
+first, rest = ph.uart_tx(0, 115200, b"A0000")   # instruction bytes to send to ui[0]
+```
+
+New to the toolchain? [docs/beginners_guide.pdf](docs/beginners_guide.pdf) explains YAML, Icarus
+Verilog, cocotb, the C++ tests, the ASIC flow, processes and Tiny Tapeout from the start.
+
 ## Repository layout
 
 ```
@@ -58,13 +83,15 @@ src/
   config.json       LibreLane settings used by the Tiny Tapeout GDS flow
 test/               cocotb test (tb.v, test.py), runs on RTL and on the gate-level netlist
 sim/                pin-level test bench (bench.h) and one test per standard (t_*.cpp)
-scripts/            run.sh (all tests + synthesis), sta.sh (timing check)
+host/               Python host library (proem_host.py) and how to drive the chip
+formal/             formal proofs (SymbiYosys): harnesses and .sby files
+scripts/            run.sh (all tests + synthesis), sta.sh (timing check), formal.sh (all proofs)
 gds/                the layout (GDS, LEF), layout images and a results summary
-docs/               design reference and ISA spec (PDF + LaTeX), architecture diagram,
-                    info.md (Tiny Tapeout datasheet page), layout renders
+docs/               design reference and ISA spec, beginner's guide, formal verification guide
+                    (PDF + LaTeX), architecture diagram, info.md (datasheet page), layout renders
   diagram/          diagram generator (make_diagram.py) and its fonts (SIL OFL)
 .github/workflows/  gds (Tiny Tapeout GDS, precheck, gate-level test, viewer), test (cocotb),
-                    docs (datasheet check), sim (every pin-level test)
+                    docs (datasheet check), sim (every pin-level test), formal (every proof)
 ```
 
 Module hierarchy:
@@ -134,7 +161,7 @@ Jane Street challenge sets:
 | Cells | 15,513 after synthesis; 19,737 after place and route, not counting fill (includes 3,266 hold buffers and 299 clock tree cells) |
 | Utilisation | 35 % of the core area; the lower third of the die is free |
 | Routing | 0 violations after detailed routing, 0 antenna violations |
-| Sign-off checks | Magic DRC 0 errors, LVS clean, Tiny Tapeout precheck pin, boundary and layer checks passed (the full KLayout DRC runs in the `gds` workflow); cocotb gate-level tests 4 of 4 pass |
+| Sign-off checks | Magic DRC 0 errors, LVS clean, Tiny Tapeout precheck passed (including the full KLayout CMOS5L DRC, on GitHub); cocotb gate-level tests pass |
 | Setup slack at 50 MHz | 8.9 ns typical, 2.6 ns slow (1.08 V, 125 °C), 12.5 ns fast |
 | Hold slack | 0.28 ns typical, 0.61 ns slow, 0.11 ns fast |
 | Maximum clock | 57 MHz at the slow corner, 90 MHz typical |
@@ -184,6 +211,21 @@ Every test resets the chip, sends `0x55` for auto-baud, programs it with instruc
 | `t_stream` | underrun abort; 12-byte UART and 20-byte SPI frames fed while running |
 | `t_random_branch` | 600 random branch programs: capture-any header, random rules, actions and run modes |
 
+## Formal proofs
+
+Four modules are proven with [SymbiYosys](https://github.com/YosysHQ/sby), for every possible
+input sequence and with no depth limit: the host FIFO, the frame buffer (including commit and
+rollback), the UART transmitter (for every clocks-per-bit value) and the branch unit (against a
+model of the BRANCH rules). Each proof takes about a second. With the
+[OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build) installed:
+
+```sh
+bash scripts/formal.sh
+```
+
+[formal/README.md](formal/README.md) lists what each proof covers, and
+[docs/formal_verification_guide.pdf](docs/formal_verification_guide.pdf) explains the method.
+
 ## Regenerating the diagram
 
 ```sh
@@ -197,8 +239,9 @@ All tests pass, and the design places, routes and meets timing on 6 × 4 Tiny Ta
 the CMOS5L template.
 Known limits are listed in the design reference; the main ones are the return link bandwidth
 (full-size Ethernet frames overflow and are reported), the instruction link rate when feeding
-fast fixed-timing lines, and no CRC generation on chip. Still to do: formal proofs, and a Quartus compile (so far checked with Yosys,
-Verilator and Icarus).
+fast fixed-timing lines, and no CRC generation on chip (the host computes CRCs and sends them as `DATA`). Still to do:
+formal proofs for the UART receiver, frame chain counters and line codec, and a Quartus compile
+(so far checked with Yosys, Verilator and Icarus).
 
 ## Licence
 

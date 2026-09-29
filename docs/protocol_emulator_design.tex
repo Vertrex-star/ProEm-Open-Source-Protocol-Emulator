@@ -379,6 +379,8 @@ Test & What it checks & Result \\
 \item Timing: the first branch design fed the new mode straight into MAIN in the same clock, adding about 5\,ns to the worst path. The decision is now registered and the chain pauses for one clock.
 \end{itemize}
 
+\paragraph{Formal proofs.} Four modules are proven with SymbiYosys for every input sequence and with no depth limit (ABC \sig{pdr}); each harness in \sig{formal/} wraps the unchanged RTL with a small reference model. The host FIFO and the frame buffer: occupancy, \sig{full}, \sig{almost\_full} and \sig{empty} exact, data out unchanged and in order, rollback discarding exactly the uncommitted entries. The UART transmitter: start, eight data bits LSB first and stop, each held for exactly the programmed number of clocks, for every ratio from 1 to 15. The branch unit: the two rules behave as the ISA describes, including priority, once per frame, and the timing of \sig{stall}, \sig{hit} and \sig{branch\_abort}. Each proof has cover checks showing its cases are reachable, and fails with a counterexample when a bug is planted. The method is explained in the separate \emph{Formal Verification} guide.
+
 \paragraph{Lint.} Verilator reports no errors; the remaining warnings are intentional width extensions. There are no combinational loops (Yosys \sig{check -assert}).
 
 \section{Implementation results}
@@ -420,7 +422,7 @@ Cells & 15,513 after synthesis; 19,737 after place and route, not counting fill 
  & (3,266 hold buffers, 299 clock tree cells, repair buffers) \\
 Utilisation & 35\,\% of the core area \\
 Routing & 0 violations after detailed routing, 0 antenna violations \\
-Sign-off & Magic DRC 0 errors; LVS clean; precheck pin, boundary and layer checks passed \\
+Sign-off & Magic DRC 0 errors; LVS clean; Tiny Tapeout precheck passed (full KLayout DRC, on GitHub) \\
 Wire length & 851\,mm \\
 \bottomrule
 \end{tabular}

@@ -28,7 +28,7 @@ fabricated yet.
 | Space used | 35 % of the core area; the lower third of the die is free |
 | Clock | 50 MHz; timing met at every corner |
 | Power | About 8.9 mW at 50 MHz |
-| Checks | Magic DRC 0 errors, LVS clean, Tiny Tapeout precheck pin, boundary and layer checks pass |
+| Checks | Magic DRC 0 errors, LVS clean, Tiny Tapeout precheck passed on GitHub (including the full KLayout DRC) |
 
 ## Space
 
@@ -84,13 +84,14 @@ a submission needs a passing GDS build.
 | Area: 6 x 4 tiles | Fits at 35 % utilisation |
 | Process: CMOS5L | Built on the CMOS5L template; the `gds` workflow uses the same flow |
 | Full RTL to GDS with timing closure | Done (this folder); timing met at the slow, typical and fast corners |
-| Verification | Pin-level tests for every standard; 1,800 random programs; 600 random branch programs; cocotb on RTL and on the CMOS5L gate-level netlist |
+| Verification | Pin-level tests for every standard; 1,800 random programs; 600 random branch programs; cocotb on RTL and on the CMOS5L gate-level netlist; formal proofs of the host FIFO, frame buffer, UART transmitter and branch unit |
 
 How it differs from the brief: the brief describes a tiny CPU running firmware. ProEm lets the
 host describe a frame (START, headers, MAIN, END), does line coding (NRZI, Manchester, bit
 stuffing, I2C conditions) in hardware, and reacts within a frame through two branch rules per
 channel. Every bit has exact timing and both channels run in parallel. Still planned before
-the deadline: formal proofs (SymbiYosys) on the FIFOs, frame buffer, UART and branch unit.
+the deadline: formal proofs for the UART receiver, the frame chain counters and the line codec
+(the host FIFO, frame buffer, UART transmitter and branch unit are already proven).
 
 Jane Street pay to fabricate the winning designs, so the entry does not need a paid Tiny
 Tapeout submission.
@@ -157,9 +158,10 @@ speed limits for the shuttle have not been checked.
 | Setup, hold and slew | 0 violations at the slow, typical and fast corners |
 | Magic DRC | 0 errors |
 | LVS (layout matches the netlist) | Clean |
-| Tiny Tapeout precheck | Pin, boundary, layer, cell name and label checks pass; the full KLayout CMOS5L DRC takes hours on a small machine and is confirmed by the `gds` workflow |
-| cocotb, gate level (CMOS5L netlist and cell models, Icarus 13 as in the CI) | 4 of 4 passed |
-| cocotb, RTL | 4 of 4 passed |
+| Tiny Tapeout precheck | Passed on GitHub, including the full KLayout CMOS5L DRC |
+| cocotb, gate level (CMOS5L netlist and cell models, Icarus 13 as in the CI) | 5 of 5 passed |
+| cocotb, RTL | 5 of 5 passed |
+| Formal proofs (SymbiYosys, unbounded) | Host FIFO, frame buffer, UART transmitter, branch unit: all proven |
 
 ## Images of the chip
 
