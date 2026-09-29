@@ -221,3 +221,43 @@ async def test_i2c_target_loopback(dut):
     assert link.got[1] == [(1, 0), (8, 0x11), (8, 0x22)], f"target read {link.got[1]}"
     assert link.status[0] == [1], f"controller status {link.status[0]}"
     assert link.status[1] == [1], f"target status {link.status[1]}"
+
+
+import os
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "host"))
+import proem_host as ph
+
+
+async def uart_receiver(dut, pin, clocks_per_bit, heard):
+    while True:
+        await RisingEdge(dut.clk)
+        line_level = (int(dut.uio_out.value) >> pin) & 1 if (int(dut.uio_oe.value) >> pin) & 1 else 1
+        if line_level == 0:
+            await ClockCycles(dut.clk, clocks_per_bit // 2)
+            value = 0
+            for i in range(8):
+                await ClockCycles(dut.clk, clocks_per_bit)
+                value |= ((int(dut.uio_out.value) >> pin) & 1) << i
+            await ClockCycles(dut.clk, clocks_per_bit)
+            if (int(dut.uio_out.value) >> pin) & 1:
+                heard.append(value)
+
+
+@cocotb.test()
+async def test_send_uart_A0000(dut):
+    link = await power_on(dut)
+    baud = 115200
+    message = b"A0000"
+    first, rest = ph.uart_tx(0, baud, message)
+    dut._log.info("first batch: " + " ".join(f"{b:02X}" for b in first))
+    dut._log.info("then:        " + " ".join(f"{b:02X}" for b in rest))
+    heard = []
+    cocotb.start_soon(uart_receiver(dut, 0, ph.uart_divider(baud), heard))
+    await link.send(first)
+    await link.send(rest)
+    await ClockCycles(dut.clk, len(message) * 10 * ph.uart_divider(baud) + 2000)
+    await link.quiet()
+    dut._log.info(f"receiver on uio[0] heard {bytes(heard)}, status {link.status[0]}")
+    assert bytes(heard) == message
+    assert link.status[0] == [1] * len(message)
