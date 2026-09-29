@@ -1,0 +1,28 @@
+# =============================================================================
+# Project: ProEm - Open Source Protocol Emulator
+# File: .github/workflows/formal.yaml
+# Type: Workflow: formal proofs (SymbiYosys)
+# Author: Paul Vincent Bezzina
+# Description:
+# =============================================================================
+
+name: formal
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  formal:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: YosysHQ/setup-oss-cad-suite@v4
+      - name: Run every proof
+        run: bash scripts/formal.sh
+      - name: Keep the logs and any counterexample traces
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: formal_results
+          path: formal/

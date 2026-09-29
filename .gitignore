@@ -19,3 +19,8 @@ test/gate_level_netlist.v
 *.vcd
 *.fst
 *.fst.hier
+
+formal/*_prove/
+formal/*_cover/
+formal/*.log
+__pycache__/
