@@ -340,6 +340,7 @@ The harness models the two BRANCH rules from the ISA, loaded through the same co
 \item[Memories] Arrays make the solvers slow or fail; \texttt{memory\_map} in the script fixes this for small arrays.
 \item[Large parameters] Proof time grows quickly with widths and depths. Shrink parameters in the harness when the logic does not depend on them.
 \item[Long counters] A 16-bit baud counter has 65,536 states per bit. Constrain the value range, or shrink the counter width in the harness, as the UART proof does with a 4-bit ratio.
+\item[Undefined bits] Reading past the end of a vector (for example \texttt{block\_success[7]} on a 7-bit bus) gives \texttt{x} bits. Newer Yosys versions refuse them with ``Design contains 'x' or 'z' bits''. Pad vectors in the harness, and where the RTL itself does this behind a guard, lower the design to gates and add \texttt{setundef -anyseq} to the script, as \file{branch\_unit.sby} does. \texttt{-anyseq} lets the bits take any value in every cycle, so the proof must hold whatever they are.
 \item[Solver differences] If one engine is slow, try another: \texttt{abc pdr} for unbounded proofs, \texttt{smtbmc yices} for bounded proofs and covers.
 \end{description}
 

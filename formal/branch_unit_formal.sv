@@ -73,6 +73,11 @@ logic [1:0] choice;
 logic expectHit;
 logic expectAbort;
 logic [7:0] seen;
+logic [63:0] padded;
+logic [7:0] successPadded;
+
+assign padded = {8'd0, block_values};
+assign successPadded = {1'b0, block_success};
 
 initial assume (!rst_n);
 initial started = 1'b0;
@@ -83,8 +88,8 @@ end
 
 always_comb begin
 	for (int r = 0; r < 2; r++) begin
-		seen = block_values[rule[r][2:0] * 8 +: 8];
-		byBlock[r] = (rule[r] != 8'd0) && !rule[r][3] && !used[r] && in_frame && (rule[r][2:0] != 3'd7) && block_success[rule[r][2:0]];
+		seen = padded[rule[r][2:0] * 8 +: 8];
+		byBlock[r] = (rule[r] != 8'd0) && !rule[r][3] && !used[r] && in_frame && (rule[r][2:0] != 3'd7) && successPadded[rule[r][2:0]];
 		trigger[r] = byBlock[r] || ((rule[r] != 8'd0) && rule[r][3] && !used[r] && in_frame && mismatch);
 		tookHit[r] = trigger[r] && (rule[r][3] || (((seen ^ value[r]) & mask[r]) == 8'd0));
 		act[r] = tookHit[r] ? rule[r][7:6] : rule[r][5:4];
