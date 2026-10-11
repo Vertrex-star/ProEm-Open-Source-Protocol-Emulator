@@ -19,6 +19,10 @@ def start(ch, val, cyc, cap, wr, pin=0):
     return [_op(1, ch), (wr << 7) | (cap << 6) | (cyc & 15), pin & 7, val & 0xFF]
 
 
+def hdr(ch, n, val, cyc, cap, wr, grp=0, sr=0, any_value=0, seek=0):
+    return [_op(2, ch, n), (wr << 7) | (cap << 6) | (grp << 4) | (cyc & 15), (sr << 7) | (any_value << 6) | (seek << 5), val & 0xFF]
+
+
 def main(ch, bits, direction, we=0, ack=0, pin=0, sr=0):
     return [_op(3, ch), (direction << 6) | (we << 5) | (ack << 4) | (sr << 3) | (pin & 7), (bits >> 8) & 0xFF, bits & 0xFF]
 
@@ -35,13 +39,13 @@ def clear(ch):
     return [_op(9, ch)]
 
 
-def line(ch, code, pin_a, stuff=0, pin_b=0, inv=0, sany=0):
-    v = (code << 13) | (inv << 12) | ((pin_a & 7) << 8) | (sany << 7) | ((stuff & 15) << 3) | (pin_b & 7)
+def line(ch, code, pin_a, stuff=0, pin_b=0, inv=0, sany=0, boundary=0):
+    v = (code << 13) | (inv << 12) | (boundary << 11) | ((pin_a & 7) << 8) | (sany << 7) | ((stuff & 15) << 3) | (pin_b & 7)
     return [_op(0xA, ch), (v >> 8) & 0xFF, v & 0xFF]
 
 
 def clock(ch, src, div, pin=0, edge=0, idle=0, etk=0):
-    v = (src << 30) | (edge << 28) | (idle << 27) | ((pin & 7) << 24) | (etk << 22) | (div & 0xFFFF)
+    v = (src << 30) | (edge << 28) | (idle << 27) | ((pin & 7) << 24) | (etk << 22) | (div & 0x3FFFFF)
     return [_op(0xB, ch), (v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF]
 
 
@@ -65,8 +69,8 @@ def crc_a(ch, width, poly, cover_from=CRC_FROM_MAIN, init_ones=0):
     return [_op(0xF, ch, 2), (((width - 1) & 15) << 4) | ((cover_from & 7) << 1) | (init_ones & 1), (poly >> 8) & 0xFF, poly & 0xFF]
 
 
-def crc_b(ch, on=1, check=0, append=0, invert=0, residue=0):
-    return [_op(0xF, ch, 3), (on << 7) | (check << 6) | (append << 5) | (invert << 4), (residue >> 8) & 0xFF, residue & 0xFF]
+def crc_b(ch, on=1, check=0, append=0, invert=0, residue=0, bytes_only=0, span=0):
+    return [_op(0xF, ch, 3), (on << 7) | (check << 6) | (append << 5) | (invert << 4) | (bytes_only << 3) | (span << 2), (residue >> 8) & 0xFF, residue & 0xFF]
 
 
 def reply(ch, when, length, pattern, gap=0):

@@ -26,17 +26,17 @@ byte `{OP[3:0], CH, N[2:0]}` followed by 0 to 4 operand bytes. The full instruct
 
 | OP | Instruction | Operands |
 | --- | --- | --- |
-| 0x1, 0x2 | START, HDR n | `{W, CAP, GRP, CYC}`, `{SR, ANY, -, PIN}`, `VALUE` |
+| 0x1, 0x2 | START, HDR n | `{W, CAP, GRP, CYC}`, `{SR, ANY, SEEK, -, PIN}`, `VALUE` |
 | 0x3 | MAIN | `{DIR, WE, ACK, SR, PIN}`, `BITS[15:0]` |
 | 0x4 | END | `{LEN, PIN_A}`, `{PAIR, INV, ERR, -, PIN_B}`, `PATTERN[15:0]` |
 | 0x5 | WDOG | `LIMIT[15:0]` |
 | 0x6 to 0x9 | ORDER, RUN, HALT, CLEAR | none |
-| 0xA | LINE | `{CODE, INV, -, PIN_A}`, `{SANY, STUFF, PIN_B}` |
-| 0xB | CLOCK | `{SRC, EDGE, IDLE, PIN}`, `{ETK, -}`, `DIV[15:0]` |
+| 0xA | LINE | `{CODE, INV, BND, PIN_A}`, `{SANY, STUFF, PIN_B}` |
+| 0xB | CLOCK | `{SRC, EDGE, IDLE, PIN}`, `{ETK, DIV[21:16]}`, `DIV[15:0]` |
 | 0xC | DATA | `VALUE` (length = N + 1) |
 | 0xD | OUT | `{DRIVE, IDLE, PAIR, EOP, I2C, CSH, -}` |
 | 0xE | LINK | return link clocks per bit (0 = same as the auto-baud rate) |
-| 0xF | BRANCH | `N` = 0, 1: rule `{HIT, MISS, SRC, BLOCK}`, `MASK`, `VALUE`; `N` = 2: CRC `{WIDTH-1, FROM, INIT}`, `POLY[15:0]`; `N` = 3: `{ON, CHK, APP, INV, -}`, `RESIDUE[15:0]`; `N` = 4: reply `{WHEN, LEN-1, GAP}`, `PATTERN[15:0]` |
+| 0xF | BRANCH | `N` = 0, 1: rule `{HIT, MISS, SRC, BLOCK}`, `MASK`, `VALUE`; `N` = 2: CRC `{WIDTH-1, FROM, INIT}`, `POLY[15:0]`; `N` = 3: `{ON, CHK, APP, INV, BYTE, SPAN, -}`, `RESIDUE[15:0]`; `N` = 4: reply `{WHEN, LEN-1, GAP}`, `PATTERN[15:0]` |
 
 Return messages are two bytes: `{1, 0, C, 0, LEN}` then the value for received data on channel C,
 `LEN = 14` for a CRC result (bit 0 good, bit 1 checked), `LEN = 15` for the end-of-frame status (bit 0 complete, 1 abort, 2 timeout, 3 line error,

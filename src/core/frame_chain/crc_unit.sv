@@ -26,6 +26,8 @@ module crc_unit (
 	output logic enabled,
 	output logic check,
 	output logic append,
+	output logic byte_only,
+	output logic span,
 	output logic[2:0] cover_from,
 	output logic[4:0] width,
 	output logic good,
@@ -47,6 +49,8 @@ logic crcOn;
 logic checkOn;
 logic appendOn;
 logic invertOn;
+logic byteOn;
+logic spanOn;
 logic feedback;
 logic reload;
 
@@ -78,6 +82,8 @@ always_ff@(posedge clk or negedge rst_n) begin
 		checkOn <= 1'b0;
 		appendOn <= 1'b0;
 		invertOn <= 1'b0;
+		byteOn <= 1'b0;
+		spanOn <= 1'b0;
 		reload <= 1'b0;
 	end else begin
 		reload <= cfg_we && (cfg_sel == 4'd10 || cfg_sel == 4'd11);
@@ -92,6 +98,8 @@ always_ff@(posedge clk or negedge rst_n) begin
 			checkOn <= cfg_rule[6];
 			appendOn <= cfg_rule[5];
 			invertOn <= cfg_rule[4];
+			byteOn <= cfg_rule[3];
+			spanOn <= cfg_rule[2];
 			residue <= {cfg_high, cfg_low};
 		end
 		if (restart || reload) begin
@@ -105,6 +113,8 @@ end
 assign enabled = crcOn;
 assign check = crcOn && checkOn;
 assign append = crcOn && appendOn;
+assign byte_only = byteOn;
+assign span = spanOn;
 assign cover_from = coverFrom;
 assign width = {1'b0, widthLess} + 5'd1;
 assign good = crcOn && (crc == residueAligned);

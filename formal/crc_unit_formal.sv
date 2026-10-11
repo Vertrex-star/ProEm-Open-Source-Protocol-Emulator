@@ -27,6 +27,8 @@ module crc_unit_formal (
 logic enabled;
 logic check;
 logic append;
+logic byte_only;
+logic span;
 logic [2:0] cover_from;
 logic [4:0] width;
 logic good;
@@ -47,6 +49,8 @@ crc_unit dut (
 	.enabled(enabled),
 	.check(check),
 	.append(append),
+	.byte_only(byte_only),
+	.span(span),
 	.cover_from(cover_from),
 	.width(width),
 	.good(good),
@@ -63,6 +67,8 @@ logic crcOn;
 logic checkOn;
 logic appendOn;
 logic invertOn;
+logic byteOn;
+logic spanOn;
 logic [15:0] model;
 logic [15:0] modelNext;
 logic [15:0] mask;
@@ -108,6 +114,8 @@ always_ff @(posedge clk or negedge rst_n) begin
 		checkOn <= 1'b0;
 		appendOn <= 1'b0;
 		invertOn <= 1'b0;
+		byteOn <= 1'b0;
+		spanOn <= 1'b0;
 		model <= '0;
 		fedBits <= '0;
 		reload <= 1'b0;
@@ -124,6 +132,8 @@ always_ff @(posedge clk or negedge rst_n) begin
 			checkOn <= cfg_rule[6];
 			appendOn <= cfg_rule[5];
 			invertOn <= cfg_rule[4];
+			byteOn <= cfg_rule[3];
+			spanOn <= cfg_rule[2];
 			residue <= {cfg_high, cfg_low};
 		end
 		if (restart || reload) begin
@@ -150,6 +160,8 @@ always_comb begin
 		assert (check == (crcOn && checkOn));
 		assert (append == (crcOn && appendOn));
 		assert (cover_from == fromBlock);
+		assert (byte_only == byteOn);
+		assert (span == spanOn);
 		assert (width == {1'b0, widthLess} + 5'd1);
 		if (!reload) begin
 			assert ((model & ~mask) == 16'h0000);

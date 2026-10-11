@@ -47,7 +47,7 @@ void program(const B&bytes){ send(bytes); settle(); }
 void wait_return(long limit=2000000){ long quiet=0; int r=RET_R?RET_R:INS_R; for(long i=0;i<limit;i++){ bool busy=ret_state!=0||!t.p_tx__serial.get<bool>(); clk(); if(busy) quiet=0; else if(++quiet>30*r) break; } }
 unsigned op(unsigned o,unsigned n=0){ return (o<<4)|(CH<<3)|(n&7); }
 B I_start(unsigned val,unsigned cyc,int cap,int wr,int pin=0){ return {op(1),(unsigned)((wr<<7)|(cap<<6)|(cyc&15)),(unsigned)(pin&7),val&0xFF}; }
-B I_hdr(int n,unsigned val,unsigned cyc,int cap,int wr,int grp=0,int sr=0,int any=0){ return {op(2,n),(unsigned)((wr<<7)|(cap<<6)|(grp<<4)|(cyc&15)),(unsigned)((sr<<7)|(any<<6)),val&0xFF}; }
+B I_hdr(int n,unsigned val,unsigned cyc,int cap,int wr,int grp=0,int sr=0,int any=0,int seek=0){ return {op(2,n),(unsigned)((wr<<7)|(cap<<6)|(grp<<4)|(cyc&15)),(unsigned)((sr<<7)|(any<<6)|(seek<<5)),val&0xFF}; }
 B I_main(unsigned bits,int dir,int we=0,int ack=0,int pin=0,int sr=0){ return {op(3),(unsigned)((dir<<6)|(we<<5)|(ack<<4)|(sr<<3)|(pin&7)),(bits>>8)&0xFF,bits&0xFF}; }
 B I_end(unsigned len,int pina,unsigned pat,int pair=0,int inv=0,int err=0,int pinb=0){ return {op(4),(unsigned)((len<<3)|(pina&7)),(unsigned)((pair<<7)|(inv<<6)|(err<<5)|(pinb&7)),(pat>>8)&0xFF,pat&0xFF}; }
 B I_wdog(unsigned l){ return {op(5),(l>>8)&0xFF,l&0xFF}; }
@@ -55,15 +55,15 @@ B I_order(int msb){ return {op(6,msb)}; }
 B I_run(int mode=0){ return {op(7,mode)}; }
 B I_halt(){ return {op(8)}; }
 B I_clear(){ return {op(9)}; }
-B I_line(unsigned code,int pina,int stuff=0,int pinb=0,int inv=0,int sany=0){ unsigned v=(code<<13)|(inv<<12)|((pina&7)<<8)|(sany<<7)|((stuff&15)<<3)|(pinb&7); return {op(0xA),(v>>8)&0xFF,v&0xFF}; }
-B I_clock(unsigned src,unsigned div,int pin=0,int edge=0,int idle=0,int etk=0){ unsigned v=(src<<30)|(edge<<28)|(idle<<27)|((pin&7)<<24)|(etk<<22)|(div&0xFFFF); return {op(0xB),(v>>24)&0xFF,(v>>16)&0xFF,(v>>8)&0xFF,v&0xFF}; }
+B I_line(unsigned code,int pina,int stuff=0,int pinb=0,int inv=0,int sany=0,int bnd=0){ unsigned v=(code<<13)|(inv<<12)|(bnd<<11)|((pina&7)<<8)|(sany<<7)|((stuff&15)<<3)|(pinb&7); return {op(0xA),(v>>8)&0xFF,v&0xFF}; }
+B I_clock(unsigned src,unsigned div,int pin=0,int edge=0,int idle=0,int etk=0){ unsigned v=(src<<30)|(edge<<28)|(idle<<27)|((pin&7)<<24)|(etk<<22)|(div&0x3FFFFF); return {op(0xB),(v>>24)&0xFF,(v>>16)&0xFF,(v>>8)&0xFF,v&0xFF}; }
 B I_out(int drive,int idle=0,int pair=0,int eop=0,int i2c=0,int cshigh=0){ return {op(0xD),(unsigned)((drive<<6)|(idle<<5)|(pair<<4)|(eop<<3)|(i2c<<2)|(cshigh<<1))}; }
 B I_link(unsigned div){ return {op(0xE),(div>>8)&0xFF,div&0xFF}; }
 B I_data(unsigned len,unsigned val){ return {op(0xC,len-1),val&0xFF}; }
 B I_branch(int rule,int hit,int miss,int src,int block,unsigned mask,unsigned value){ return {op(0xF,rule),(unsigned)((hit<<6)|(miss<<4)|(src<<3)|(block&7)),mask&0xFF,value&0xFF}; }
 enum { KEEP=0, GO_READ=1, GO_WRITE=2, ABORT=3 };
 B I_crc_a(int width,int from,int init_ones,unsigned poly){ return {op(0xF,2),(unsigned)((((width-1)&15)<<4)|((from&7)<<1)|(init_ones&1)),(poly>>8)&0xFF,poly&0xFF}; }
-B I_crc_b(int on,int check,int append,int inv,unsigned residue){ return {op(0xF,3),(unsigned)((on<<7)|(check<<6)|(append<<5)|(inv<<4)),(residue>>8)&0xFF,residue&0xFF}; }
+B I_crc_b(int on,int check,int append,int inv,unsigned residue,int bytes=0,int span=0){ return {op(0xF,3),(unsigned)((on<<7)|(check<<6)|(append<<5)|(inv<<4)|(bytes<<3)|(span<<2)),(residue>>8)&0xFF,residue&0xFF}; }
 B I_reply(int when,int len,int gap,unsigned pattern){ return {op(0xF,4),(unsigned)(((when&3)<<6)|(((len-1)&15)<<2)|(gap&3)),(pattern>>8)&0xFF,pattern&0xFF}; }
 enum { REPLY_OFF=0, REPLY_GOOD=1, REPLY_BAD=2, REPLY_ALWAYS=3 };
 unsigned crc_wire(const std::vector<int>&bits,int width,unsigned poly,int init_ones){ int sh=16-width; unsigned pa=(poly<<sh)&0xFFFF; unsigned c=init_ones?((0xFFFFu<<sh)&0xFFFF):0;

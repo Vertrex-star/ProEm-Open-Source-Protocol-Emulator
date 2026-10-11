@@ -20,6 +20,8 @@
 \newcommand{\vfive}{\textcolor{fivec}{\textsf{\small v0.5}}}
 \definecolor{sixc}{HTML}{B45309}
 \newcommand{\vsix}{\textcolor{sixc}{\textsf{\small v0.6}}}
+\definecolor{sevenc}{HTML}{9D174D}
+\newcommand{\vseven}{\textcolor{sevenc}{\textsf{\small v0.7}}}
 \newcommand{\sig}[1]{\texttt{#1}}
 \setlist{itemsep=2pt,topsep=4pt}
 \setlength{\parskip}{4pt}
@@ -28,10 +30,10 @@
 \pagestyle{fancy}
 \fancyhf{}
 \lhead{\small Paul Vincent Bezzina \textbar{} ProEm - Open Source Protocol Emulator}
-\rhead{\small ISA draft v0.6}
+\rhead{\small ISA draft v0.7}
 \cfoot{\small\thepage}
 
-\title{ProEm Instruction Set\\\large Draft v0.6}
+\title{ProEm Instruction Set\\\large Draft v0.7}
 \author{Paul Vincent Bezzina}
 \date{11 October 2026}
 
@@ -69,6 +71,15 @@ Items marked \new{} were added in v0.4 (25 September).
 \item \textbf{Reply} \vsix: \sig{BRANCH 4} sends a short fixed pattern (up to 16 bits) a set number of bit times after a read frame ends, optionally only when the CRC was good or bad. This is the USB handshake (ACK) and the CAN acknowledge slot.
 \item \textbf{Branch on the CRC} \vsix: a rule with \sig{SRC} = 1 and \sig{BLOCK} = 1 acts on the CRC result.
 \item \textbf{CAN bit stuffing tested} \vsix: \sig{LINE} \sig{STUFF} = 5 with \sig{SANY} = 1 now has end-to-end tests, receive and chip to chip.
+\end{enumerate}
+
+\paragraph{v0.7 (11 October).} Items marked \vseven{} are new in this version. They remove the limits found while testing fifteen further standards; every field was reserved before, so v0.6 programs work unchanged.
+\begin{enumerate}
+\item \textbf{22-bit divider} \vseven: \sig{CLOCK} byte 2 bits 5--0 are \sig{DIV[21:16]}. The slowest rate at 50\,MHz falls from 763 to 12\,bit/s (RC5 infrared, K-Line 5-baud init).
+\item \textbf{Manchester boundary lock} \vseven: \sig{LINE} byte 1 bit 3, \sig{BND}, makes the decoder treat the first edge after idle as a bit boundary (DALI, whose start bit begins with a boundary edge).
+\item \textbf{Seeking headers} \vseven: \sig{HDR} byte 2 bit 5, \sig{SEEK}, makes a read header skip incoming bits until its first bit appears, so a frame can wait out a gap of any length, for example idle time before a start bit (LIN inter-byte space).
+\item \textbf{Byte-field CRCs} \vseven: \sig{BRANCH 3} byte 1 bits 3 and 2, \sig{BYTE} and \sig{SPAN}, let the CRC skip fields shorter than 8 bits and run across frames (Modbus RTU, SMBus PEC).
+\item \textbf{Release while reading} \vseven: with \sig{DRIVE} = \texttt{01} the data and pair outputs are released during generated read bits and between entries of a generated-clock frame, so one push-pull line can carry both directions (3-wire SPI, MDIO).
 \end{enumerate}
 
 \section{Frame chain recap}
@@ -151,7 +162,7 @@ Both take the same three operand bytes.
 \bitbox{1}{\sig{W}} & \bitbox{1}{\sig{CAP}} & \bitbox{2}{\sig{GRP}} & \bitbox{4}{\sig{CYC}}
 \end{rightwordgroup}\\
 \begin{rightwordgroup}{byte 2}
-\bitbox{1}{\sig{SR}} & \bitbox{1}{\sig{ANY}} & \bitbox{3}{\color{gray}reserved} & \bitbox{3}{\sig{PIN}}
+\bitbox{1}{\sig{SR}} & \bitbox{1}{\sig{ANY}} & \bitbox{1}{\tiny\sig{SEEK}} & \bitbox{2}{\color{gray}res.} & \bitbox{3}{\sig{PIN}}
 \end{rightwordgroup}\\
 \begin{rightwordgroup}{byte 3}
 \bitbox{8}{\sig{VALUE}}
@@ -169,6 +180,7 @@ Field & Meaning \\
 \sig{CYC} & Field length in bits, 1--8. For \sig{START} only, 0 means a \emph{condition} START: succeed as soon as \sig{PIN} equals \sig{VALUE[0]}, without using a tick (SPI chip select). \vfive{} In I\textsuperscript{2}C target mode (\sig{OUT I2C} with a SYNC clock) it waits for an I\textsuperscript{2}C START or repeated START instead. \\
 \sig{SR} & \new{} \sig{HDR} only: a repeated START (Sr) just before this block. The chain sends the TX sender a \sig{wire} entry of length 0, which means ``Sr''; the block waits until it has gone out. Needed for I\textsuperscript{2}C write-then-read. \\
 \sig{ANY} & \vfive{} \sig{HDR} read blocks only: accept any value instead of comparing. The received bits are kept, returned with \sig{CAP}, and can be tested by \sig{BRANCH}. \\
+\sig{SEEK} & \vseven{} \sig{HDR} read blocks only (not with \sig{ANY}): ignore incoming bits until one equals the field's first bit, then compare the remaining \sig{CYC}$-$1 bits as usual (a mismatch there still aborts). Use it to wait out a gap of unknown length in the middle of a frame: a seeking 1-bit header with \sig{VALUE} 0 waits for the next start bit. The watchdog still ends a frame that never continues. \\
 \sig{PIN} & \sig{START} only: its own input pin. Headers ignore it and use the data pin set by \sig{MAIN}. \\
 \sig{VALUE} & The value to send or compare, as a plain number in the bottom \sig{CYC} bits. The control unit handles bit order and alignment. \\
 \bottomrule
@@ -333,7 +345,7 @@ Field & Meaning \\
 \begin{bytefield}[bitwidth=2.4em]{8}
 \bitheader[endianness=big]{0-7}\\
 \begin{rightwordgroup}{byte 1}
-\bitbox{1}{\sig{ON}} & \bitbox{1}{\sig{CHK}} & \bitbox{1}{\sig{APP}} & \bitbox{1}{\sig{INV}} & \bitbox{4}{0}
+\bitbox{1}{\sig{ON}} & \bitbox{1}{\sig{CHK}} & \bitbox{1}{\sig{APP}} & \bitbox{1}{\sig{INV}} & \bitbox{1}{\tiny\sig{BYTE}} & \bitbox{1}{\tiny\sig{SPAN}} & \bitbox{2}{0}
 \end{rightwordgroup}\\
 \begin{rightwordgroup}{bytes 2--3}
 \bitbox{8}{\sig{RESIDUE} (16 bits, high byte first)}
@@ -349,6 +361,8 @@ Field & Meaning \\
 \sig{CHK} & Check on read frames: return the result (below) after MAIN. \\
 \sig{APP} & Append on write frames: send the CRC after MAIN. \\
 \sig{INV} & Send the CRC inverted (USB). Has no effect on the check. \\
+\sig{BYTE} & \vseven{} Only 8-bit fields go through the CRC: write entries of 8 bits, read blocks with \sig{CYC} = 8, and \sig{MAIN} when it is at least 8 bits long. Start, stop, parity and acknowledge bits are skipped, which is what byte-oriented CRCs such as Modbus and the SMBus PEC need. \\
+\sig{SPAN} & \vseven{} Do not restart the CRC at the start of each frame; it runs on until \sig{BRANCH 2} or \sig{BRANCH 3} is written again. With one frame per UART character this covers a whole message; the host rewrites \sig{BRANCH 3} before each message, and the result after the last character is the message's check. \\
 \sig{RESIDUE} & The register value that means ``good'' on receive, right aligned. \\
 \bottomrule
 \end{tabularx}
@@ -415,7 +429,7 @@ A chain needs two things besides its blocks: a bit on its data pin and a \sig{ti
 \begin{bytefield}[bitwidth=2.4em]{8}
 \bitheader[endianness=big]{0-7}\\
 \begin{rightwordgroup}{byte 1}
-\bitbox{3}{\sig{CODE}} & \bitbox{1}{\sig{INV}} & \bitbox{1}{\color{gray}res.} & \bitbox{3}{\sig{PIN\_A}}
+\bitbox{3}{\sig{CODE}} & \bitbox{1}{\sig{INV}} & \bitbox{1}{\sig{BND}} & \bitbox{3}{\sig{PIN\_A}}
 \end{rightwordgroup}\\
 \begin{rightwordgroup}{byte 2}
 \bitbox{1}{\sig{SANY}} & \bitbox{4}{\sig{STUFF}} & \bitbox{3}{\sig{PIN\_B}}
@@ -442,6 +456,7 @@ Every input pin passes through a two-flop synchroniser and one more register bef
 
 \begin{itemize}
 \item \sig{INV} inverts the pin before decoding and the output after encoding (for USB full speed, where J is D+ high).
+\item \vseven{} \sig{BND} (Manchester only): after the line has been idle for two bit times, the decoder takes the first edge as a bit \emph{boundary} and locks onto the middle edge half a bit later. Use it when frames start with a bit whose first half differs from the idle level, such as DALI's start bit. Without it the first edge is taken as a middle edge, which is right for frames that start with a preamble (10BASE-T) or with a bit whose first half equals idle (RC5).
 \item \sig{STUFF} = $n$ removes the bit after $n$ equal bits in a row, and gives it no \sig{tick}, so the chain never sees it; 0 turns unstuffing off. USB: $n$ = 6, counting 1s only (\sig{SANY} = 0). CAN would use $n$ = 5 counting runs of either value (\sig{SANY} = 1). A stuffed bit with the wrong value aborts the frame with \sig{line\_error}.
 \item The encoder uses the same setting for what the chain sends: NRZ, NRZI (starting from J), or Manchester, with a stuff bit inserted after $n$ equal bits. With code \texttt{010} it drives the pair: D+ on the data output, D$-$ on the pair output.
 \item NRZ and NRZI sample in the middle of each bit and re-centre on every edge. Manchester decodes on the mid-bit edges: after each accepted edge it ignores edges for $\frac34$ of a bit, so boundary edges between equal bits are skipped. This needs at least 5 clocks per bit: at 4, an edge can sit exactly between the two cases.
@@ -456,7 +471,7 @@ Every input pin passes through a two-flop synchroniser and one more register bef
 \bitbox{2}{\sig{SRC}} & \bitbox{2}{\sig{EDGE}} & \bitbox{1}{\sig{IDLE}} & \bitbox{3}{\sig{PIN}}
 \end{rightwordgroup}\\
 \begin{rightwordgroup}{byte 2}
-\bitbox{2}{\sig{ETK}} & \bitbox{6}{\color{gray}reserved}
+\bitbox{2}{\sig{ETK}} & \bitbox{6}{\sig{DIV[21:16]} \vseven}
 \end{rightwordgroup}\\
 \begin{rightwordgroup}{bytes 3--4}
 \bitbox{8}{\sig{DIV[15:0]}}
@@ -482,6 +497,7 @@ Every input pin passes through a two-flop synchroniser and one more register bef
 \item \sig{IDLE}: level of a generated clock between frames (SPI CPOL; 1 for I\textsuperscript{2}C SCL).
 \item A generated clock only runs while there is work: the TX sender has a bit waiting or a read block is waiting for one (\sig{listen}). It never runs past the data.
 \item \sig{ETK} selects \sig{end\_tick}: \texttt{00} same as \sig{tick}, \texttt{01} every system clock, \texttt{10} the decoder's mid-bit strobe (every bit time, including stuffed bits).
+\item \vseven{} \sig{DIV} is 22 bits: bytes 3--4 hold \sig{DIV[15:0]} and byte 2 bits 5--0 hold \sig{DIV[21:16]}, so it reaches 4\,194\,303 clocks (12\,bit/s at 50\,MHz). Earlier programs leave those bits 0.
 \item \sig{DIV} is in system clocks (50\,MHz). UART at 115\,200 baud: 434. USB low speed: 33 (1.515\,Mb/s, within $\pm$1.5\,\%). 10BASE-T receive: 5. I\textsuperscript{2}C at 100\,kHz generated: 250 (half period). Manchester transmit needs an even \sig{DIV}, so 10BASE-T transmit needs a 40 or 60\,MHz clock.
 \item In I\textsuperscript{2}C mode (\sig{OUT}) a generated SCL is low for the first half of each bit and high for the second, whatever \sig{IDLE} says; the bus idles high between transactions.
 \end{itemize}
@@ -504,7 +520,7 @@ Each chain has a data output, a pair output, a clock output (each with its own o
 \toprule
 Field & Meaning \\
 \midrule
-\sig{DRIVE} & \texttt{00} off (after reset and \sig{CLEAR}), \texttt{01} push-pull while a packet is being sent, \texttt{10} open drain on data and clock (drive low for 0, release for 1), \texttt{11} push-pull always. \\
+\sig{DRIVE} & \texttt{00} off (after reset and \sig{CLEAR}), \texttt{01} push-pull while a packet is being sent (\vseven{} released during generated read bits and between entries of a generated-clock frame, so a shared data line can be read), \texttt{10} open drain on data and clock (drive low for 0, release for 1), \texttt{11} push-pull always. \\
 \sig{IDLE} & Data level between frames with \texttt{DRIVE = 11} (1 for a UART line). \\
 \sig{PAIR} & Drive the complement on the pair output (USB D$-$). \\
 \sig{EOP} & At the end of each frame send an end of packet: two bit times of SE0 then one of J on a pair (USB), or two bit times high (10BASE-T). \\
@@ -740,6 +756,17 @@ C7 id[10:3]   C2 id[2:0]   C7 data   72
 
 A lost arbitration stops the chip driving within the same bit and reports \texttt{C2}; the winning frame continues undisturbed on the line and can be received by the other chain. The arbitration test runs without bit stuffing. \vsix{} \sig{LINE} \sig{STUFF} = 5 with \sig{SANY} = 1 is now tested on its own: a CAN frame with stuffing is received, its CRC-15 checked, and the acknowledge driven into the ACK slot, both from a node model and chip to chip.
 
+\section{Changes in v0.7}
+
+\begin{itemize}
+\item \sig{CLOCK}: \sig{DIV} widened to 22 bits using the reserved bits of byte 2.
+\item \sig{LINE}: byte 1 bit 3 is \sig{BND}, the Manchester boundary lock.
+\item \sig{HDR}: byte 2 bit 5 is \sig{SEEK}.
+\item \sig{BRANCH 3}: byte 1 bits 3 and 2 are \sig{BYTE} and \sig{SPAN}.
+\item \sig{OUT}: \sig{DRIVE} = \texttt{01} releases the data and pair outputs during generated read bits.
+\item Sampling note: with a generated push-pull clock, input bits are sampled about one system clock before the chip's own sampling edge; with an open-drain clock they are sampled once the clock is seen high, as I\textsuperscript{2}C clock stretching requires. Protocols that need data held only up to the edge (MDIO) should therefore use a push-pull clock, which \sig{DRIVE} = \texttt{01} now allows together with a readable data line.
+\end{itemize}
+
 \section{Changes in v0.6}
 
 \begin{itemize}
@@ -796,6 +823,7 @@ Line codec: NRZ, NRZI pair, Manchester, stuffing, SYNC, ASYNC, GENERATE, RECOVER
 \sig{OUT}, \sig{LINK}, auto-baud, return link & In RTL, tested & Every test reads its results back over the return UART \\
 \sig{BRANCH}, \sig{ANY}, I\textsuperscript{2}C target, streaming and underrun \vfive & In RTL, tested & I\textsuperscript{2}C target, SWD-style and CAN-style tests, 600 random branch programs, cocotb controller-to-target loopback \\
 CRC check and append, reply, branch on CRC, CAN stuffing \vsix & In RTL, tested & USB CRC-16 and CRC-5 with ACK, USB transmit with CRC, CAN CRC-15 with ACK from a node model and chip to chip, random widths and polynomials looped chip to chip; formal proof of the CRC unit \\
+22-bit \sig{DIV}, \sig{BND}, \sig{SEEK}, \sig{BYTE} and \sig{SPAN} CRCs, release while reading \vseven & In RTL, tested & RC5 at 1.778\,ms bits, K-Line 5-baud init, DALI received by the Manchester decoder, LIN header with a gap, Modbus and SMBus CRCs checked on chip, 3-wire SPI and MDIO push-pull; sixteen standards in \sig{t\_standards} \\
 NRZI single-ended, Manchester Thomas & In RTL, not tested & Same paths as the tested codes \\
 \bottomrule
 \end{tabularx}

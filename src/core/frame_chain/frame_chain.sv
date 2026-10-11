@@ -37,6 +37,7 @@ module frame_chain #(
 	input logic[1:0] cfg_group,
 	input logic cfg_sr,
 	input logic cfg_any,
+	input logic cfg_seek,
 	input logic cfg_follow,
 	input logic[15:0] cfg_main_cycles,
 	input logic cfg_wait_end,
@@ -212,6 +213,10 @@ logic[5:0] tail_step;
 logic tail_active;
 logic tail_start;
 logic tail_push;
+logic crc_byte;
+logic crc_span;
+logic main_short;
+logic[blocks-1:0] field_ok;
 logic tail_take;
 logic tail_wire;
 logic tail_advance;
@@ -297,6 +302,7 @@ always_ff@(posedge clk or negedge rst_n) begin
 		commit_wait <= 1'b0;
 		outstanding <= '0;
 		queued <= '0;
+		main_short <= 1'b0;
 		end_configured <= 1'b0;
 		rearm_wait <= 1'b0;
 		internal_armed <= 1'b0;
@@ -371,6 +377,7 @@ always_ff@(posedge clk or negedge rst_n) begin
 			end
 		end
 		if (cfg_we && cfg_sel == 4'd14) begin
+			main_short <= (cfg_main_cycles < 16'd8);
 			data_pin <= cfg_pin;
 			main_sr <= cfg_sr;
 		end
@@ -464,6 +471,7 @@ generate
 			.capture(cfg_capture),
 			.write_config(cfg_write),
 			.any_config(cfg_any),
+			.seek_config(cfg_seek),
 			.input_bit(input_bit),
 			.msb(msb),
 			.enable(block_enable[i]),
@@ -576,6 +584,9 @@ always_comb begin
 	for (int k = 0; k < 8; k++) begin
 		covered[k] = crc_on && (k >= crc_from);
 	end
+	for (int k = 0; k < blocks; k++) begin
+		field_ok[k] = !crc_byte || (block_len[k] == 4'd8);
+	end
 	for (int r = 0; r < 8; r++) begin
 		start_wire[r] = (r < block_len[0]) ? block_value[0][block_len[0] - 1 - r] : 1'b0;
 	end
@@ -584,11 +595,11 @@ always_comb begin
 	end
 end
 
-assign rx_bit_feed = read_tick && ((|(block_listening[blocks-1:1] & covered[blocks-1:1])) || (main_listening && !main_writing && covered[7]));
-assign start_feed = block_success[0] && !start_prev && !block_writing[0] && covered[0] && (block_len[0] != 4'd0);
-assign tx_feed = wire_accept && (fifo_din[11:8] != 4'd0) && raw_covered;
+assign rx_bit_feed = read_tick && ((|(block_listening[blocks-1:1] & covered[blocks-1:1] & field_ok[blocks-1:1])) || (main_listening && !main_writing && covered[7] && !(crc_byte && main_short)));
+assign start_feed = block_success[0] && !start_prev && !block_writing[0] && covered[0] && (block_len[0] != 4'd0) && field_ok[0];
+assign tx_feed = wire_accept && (fifo_din[11:8] != 4'd0) && raw_covered && (!crc_byte || (fifo_din[11:8] == 4'd8));
 assign crc_feed = tx_feed || start_feed || rx_bit_feed;
-assign crc_restart = !block_success[0];
+assign crc_restart = !block_success[0] && !crc_span;
 
 always_comb begin
 	if (tx_feed) begin
@@ -618,6 +629,8 @@ crc_unit crc_block (
 	.enabled(crc_on),
 	.check(crc_check),
 	.append(crc_append),
+	.byte_only(crc_byte),
+	.span(crc_span),
 	.cover_from(crc_from),
 	.width(crc_width),
 	.good(crc_good),

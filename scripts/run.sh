@@ -45,7 +45,7 @@ echo "== randomised branch programs, 100 per seed"
 for m in 0 1; do for s in 1 2 3; do ./build/t_random_branch $s $m 100; done; done
 echo "== CRC: USB CRC16 and CRC5 with ACK reply, CAN CRC-15 with stuffing and ACK slot, random CRCs"
 ./build/t_crc 60
-echo "== 15 more standards: RS-485, MIDI, NMEA 0183, PROFIBUS, Modbus, DMX512, LIN, K-Line, SDI-12, SMBus, MDIO, SD card, 3-wire SPI, DALI, CAN 2.0B"
+echo "== 16 more standards: RS-485, MIDI, NMEA 0183, PROFIBUS, Modbus, DMX512, LIN, K-Line, SDI-12, SMBus, MDIO, SD card, 3-wire SPI, DALI, CAN 2.0B, RC5"
 ./build/t_standards
 if [ -n "$SKIP_SYNTH" ]; then exit 0; fi
 for top in frame_chain line_codec protocol_emulator; do

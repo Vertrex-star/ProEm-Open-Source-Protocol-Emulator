@@ -16,13 +16,13 @@ Built for the [Jane Street protocol emulator ASIC competition](https://blog.jane
 | --- | --- |
 | Channels | 2 independent channels, A and B, running at the same time |
 | Host link | UART in with auto-baud, UART out at a rate set by `LINK` (down to 4 clocks per bit) |
-| Verified at pin level | UART, SPI (controller and target), I2C controller and target, PS/2, 10BASE-T receive, Manchester transmit, USB low speed receive and transmit with CRC-5/CRC-16 and handshake, SWD-style acknowledge handling, CAN with bit stuffing, arbitration, CRC-15 and acknowledge; plus RS-232/422/485, MIDI, NMEA 0183, PROFIBUS DP, Modbus RTU, DMX512, LIN, K-Line, SDI-12, SMBus/PMBus, MDIO, SD card (SPI), 3-wire SPI, DALI, CAN 2.0B / NMEA 2000 |
+| Verified at pin level | UART, SPI (controller and target), I2C controller and target, PS/2, 10BASE-T receive, Manchester transmit, USB low speed receive and transmit with CRC-5/CRC-16 and handshake, SWD-style acknowledge handling, CAN with bit stuffing, arbitration, CRC-15 and acknowledge; plus RS-232/422/485, MIDI, NMEA 0183, PROFIBUS DP, Modbus RTU, DMX512, LIN, K-Line, SDI-12, SMBus/PMBus, MDIO, SD card (SPI), 3-wire SPI, DALI, CAN 2.0B / NMEA 2000, RC5 infrared |
 | Reacting on chip | `BRANCH` rules change a frame's direction, or abort it, from a field just received or from the line not reading back what the chip drove |
 | CRC and reply on chip | Any CRC of 1 to 16 bits, checked on receive or appended on transmit; a fixed reply (USB ACK, CAN ACK slot) sent a set number of bits after a good or bad frame |
 | Long packets | `DATA` streams while a frame runs; fixed-timing lines report an underrun if the data runs out |
-| Logic | 15,513 cells after synthesis, 19,737 after place and route (35 % of the 6 × 4 core area), before the CRC unit; to be re-hardened |
+| Logic | 18,366 cells after synthesis (ISA v0.7). The last place and route, before the CRC unit, had 15,513 after synthesis and 19,737 after place and route (35 % of the 6 × 4 core area); to be re-hardened |
 | Timing | Closed after routing at all three corners on CMOS5L: 17.4 ns worst path at 1.08 V, 125 °C (20 ns budget) |
-| Instruction set | ISA v0.6, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
+| Instruction set | ISA v0.7, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
 
 ## How it works
 
@@ -46,7 +46,7 @@ The [design reference](docs/protocol_emulator_design.pdf) explains every block a
 instruction bytes for each standard. The line codec, the most involved block, has its own
 walk-through: [docs/line_codec.pdf](docs/line_codec.pdf). The
 [standards programming guide](docs/standards_guide.pdf) gives tested receive and transmit
-programs for fifteen more standards.
+programs for sixteen more standards.
 
 ## Using the chip
 
@@ -217,7 +217,7 @@ Every test resets the chip, sends `0x55` for auto-baud, programs it with instruc
 | `t_branch` | SWD-style acknowledge (OK continues, WAIT and FAULT abort); CAN-style arbitration won and lost |
 | `t_stream` | underrun abort; 12-byte UART and 20-byte SPI frames fed while running |
 | `t_random_branch` | 600 random branch programs: capture-any header, random rules, actions and run modes |
-| `t_standards` | 15 more standards, receive and transmit: RS-232/422/485 with driver enable, MIDI, NMEA 0183, PROFIBUS DP, Modbus RTU, DMX512, LIN master and slave, K-Line fast init, SDI-12, SMBus with PEC, MDIO, SD card CMD0/CMD8 with CRC-7, 3-wire SPI, DALI, CAN 2.0B extended (NMEA 2000) |
+| `t_standards` | 16 more standards, receive and transmit (42 checks), including RC5 infrared and the v0.7 features: RS-232/422/485 with driver enable, MIDI, NMEA 0183, PROFIBUS DP, Modbus RTU, DMX512, LIN master and slave, K-Line fast init, SDI-12, SMBus with PEC, MDIO, SD card CMD0/CMD8 with CRC-7, 3-wire SPI, DALI, CAN 2.0B extended (NMEA 2000) |
 | `t_crc` | USB CRC-16 receive with ACK reply, CRC-5 tokens, USB transmit with CRC appended; CAN with stuffing, CRC-15 and ACK slot from a node model and chip to chip; 60 random CRCs looped chip to chip |
 
 ## Formal proofs

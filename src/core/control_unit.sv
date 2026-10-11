@@ -27,6 +27,7 @@ module control_unit (
 	output logic [1:0] cfg_group,
 	output logic cfg_sr,
 	output logic cfg_any,
+	output logic cfg_seek,
 	output logic cfg_follow,
 	output logic [15:0] cfg_main_cycles,
 	output logic cfg_wait_end,
@@ -110,6 +111,7 @@ logic internal_capture;
 logic internal_write;
 logic internal_sr;
 logic internal_any;
+logic internal_seek;
 logic internal_follow;
 logic internal_wait_end;
 logic internal_ack;
@@ -183,6 +185,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 		internal_write <= 1'b0;
 		internal_sr <= 1'b0;
 		internal_any <= 1'b0;
+		internal_seek <= 1'b0;
 		internal_follow <= 1'b0;
 		internal_wait_end <= 1'b0;
 		internal_ack <= 1'b0;
@@ -251,6 +254,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 						internal_cycles <= {4'd0, operands[19:16]};
 						internal_sr <= operands[15];
 						internal_any <= (opcode == OP_HDR) && operands[14];
+						internal_seek <= (opcode == OP_HDR) && operands[13];
 						internal_pin <= operands[10:8];
 						internal_compare <= (opcode == OP_START) ? startValue : operands[7:0];
 						if (opcode == OP_HDR && (index == 3'd0 || index == 3'd7)) begin
@@ -384,6 +388,7 @@ assign cfg_write = internal_write;
 assign cfg_group = internal_group;
 assign cfg_sr = internal_sr;
 assign cfg_any = internal_any;
+assign cfg_seek = internal_seek;
 assign cfg_follow = internal_follow;
 assign cfg_main_cycles = internal_main_cycles;
 assign cfg_wait_end = internal_wait_end;

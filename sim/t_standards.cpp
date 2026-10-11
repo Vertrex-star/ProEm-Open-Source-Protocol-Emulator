@@ -115,6 +115,15 @@ bool t_modbus(){ U req={0x01,0x03,0x00,0x00,0x00,0x02}; unsigned c=crc16_modbus(
   U rsp={0x01,0x03,0x04,0x00,0x0A,0x00,0x0B}; c=crc16_modbus(rsp); rsp.push_back(c&0xFF); rsp.push_back(c>>8);
   bool ok=uart_std("Modbus RTU 19200 8E1",2604,8,1,1,req,rsp,1,0,false);
   ok&=report("Modbus RTU: request CRC is C4 0B",req[6]==0xC4&&req[7]==0x0B,hexs(req));
+  const long D=2604;
+  for(int bad=0;bad<2;bad++){ reset_both(); CH=0;
+    program(cat({I_line(0,0),I_clock(ASYNC,D),I_start(0,1,0,0,0),I_hdr(1,0,8,1,0,0,0,1),I_hdr(2,0,1,1,0,0,0,1),I_main(1,0,0,0,0),
+      I_crc_a(16,1,1,0x8005),I_crc_b(1,1,0,0,0,1,1),I_run(0)}));
+    U m=req; if(bad) m[3]^=0x01; for(unsigned b:m) uwave(m0,b,D,8,1,1);
+    scen=[&]{ pin_in=0xFE|m0.step(); }; run_model(m0,D*4);
+    unsigned last=0; U data; for(auto&x:got[0]){ if(x.first==14) last=x.second; if(x.first==8) data.push_back(x.second); }
+    char d[80]; snprintf(d,sizeof d," bytes%s, CRC result after the last byte %02X",hexs(data).c_str(),last);
+    ok&=report(bad?"Modbus RTU receive, one bit flipped: on-chip CRC reports bad":"Modbus RTU receive with the CRC checked on chip (byte fields, spans frames)",data==m&&last==(bad?2u:3u)&&status[0]==U(m.size(),1),d); }
   return ok; }
 
 
@@ -155,17 +164,17 @@ bool t_lin(){ const long D=2604; bool ok=true; unsigned pid=lin_pid(0x10); U dat
   char d[96]; snprintf(d,sizeof d," break %.1f bits, delimiter %.1f, frame%s",brk/(double)D,del/(double)D,hexs(v).c_str());
   ok&=report("LIN master: break, sync, PID 0x10, 2 bytes, enhanced checksum",good&&brk>=13*D&&del>=D&&all_ok(f)&&status[0]==U({1}),d);
   reset_both(); CH=0;
-  program(cat({I_line(0,0),I_clock(ASYNC,D),I_out(2,1),I_start(0x55,8,0,0,0),I_hdr(1,0x1,2,0,0),I_hdr(2,1,1,0,0),I_hdr(3,0,1,0,0),I_hdr(4,pid,8,0,0),I_hdr(5,1,1,0,0),I_main(31,1),
+  program(cat({I_line(0,0),I_clock(ASYNC,D),I_out(2,1),I_start(0x55,8,0,0,0),I_hdr(1,0x1,2,0,0),I_hdr(2,1,1,0,0),I_hdr(3,0,1,0,0,0,0,0,1),I_hdr(4,pid,8,0,0),I_hdr(5,1,1,0,0),I_main(31,1),
     I_data(2,1),I_data(8,data[0]),I_data(2,1),I_data(8,data[1]),I_data(2,1),I_data(8,chk),I_data(1,1),I_run(0)}));
   size_t mark=0; long hdr_end=0;
-  auto header=[&](unsigned p,int dl){ m0.add(1,D*3); m0.add(0,D*13); m0.add(1,D*dl); uwave(m0,0x55,D,8,0,1); uwave(m0,p,D,8,0,1); };
+  auto header=[&](unsigned p,int dl,int gap){ m0.add(1,D*3); m0.add(0,D*13); m0.add(1,D*dl); uwave(m0,0x55,D,8,0,1); m0.add(1,D*gap); uwave(m0,p,D,8,0,1); };
   scen=[&]{ int bus=m0.step() && oA(); tr.push_back(bus); pin_in=0xFE|bus; };
-  header(lin_pid(0x21),1); header(pid,2);
+  header(lin_pid(0x21),1,0); header(pid,2,3);
   while(m0.busy()) clk(); hdr_end=(long)tr.size(); idle(D*40); wait_return();
   mark=(size_t)hdr_end; auto r=udecode(tr,D,8,0,1,0,mark); U rv=values(r);
   long space=(long)first_fall(tr,mark)-hdr_end;
   char d2[96]; snprintf(d2,sizeof d2," response%s after %.1f bits | status%s",hexs(rv).c_str(),space/(double)D,showst(status[0]).c_str());
-  ok&=report("LIN slave: ignores PID 0x21, answers 0x10 (2-bit delimiter)",rv==U({data[0],data[1],chk})&&all_ok(r)&&status[0]==U({0x02,0x01}),d2);
+  ok&=report("LIN slave: ignores 0x21, answers 0x10 (2-bit delimiter, 3-bit gap)",rv==U({data[0],data[1],chk})&&all_ok(r)&&status[0]==U({0x02,0x01}),d2);
   return ok; }
 
 unsigned sum8(const U&b){ unsigned s=0; for(unsigned x:b) s+=x; return s&0xFF; }
@@ -255,24 +264,27 @@ bool t_smbus(){ bool ok=true; reset_both(); dev=Dev(); scen=smbus_env;
   U r; for(auto&x:got[0]) r.push_back(x.second);
   bool rok=r.size()==3 && crc8_bytes({0x80,0x21,0x81,r[0],r[1]},0x07)==r[2];
   ok&=report("SMBus Read Word with PEC: data and PEC checked by the host",rok&&r[0]==0xCD&&r[1]==0xAB&&status[0]==U({1}),std::string(" bus: ")+dev.log+"|"+show(got[0]));
+  program(cat({I_crc_a(8,0,0,0x07),I_crc_b(1,1,0,0,0,1)}));
+  for(int bad=0;bad<2;bad++){ dev.regs[0x23]=rpec^(bad?0x10:0); clear_results(); dev.log.clear(); program(I_run(1)); idle(150000); wait_return();
+    ok&=report(bad?"SMBus Read Word, corrupted PEC: on-chip check reports bad":"SMBus Read Word: PEC checked on chip (byte fields only)",got[0]==V({{8,0xCD},{8,0xAB},{8,rpec^(bad?0x10u:0u)},{14,bad?2u:3u}})&&status[0]==U({1}),show(got[0])); }
   return ok; }
 
-struct Phy { unsigned regs[32]={0}; unsigned addr=1; int ones=0, idx=-1, out=1, rd=0, pend=-1, pv=1; unsigned frame=0; int pmdc=0; } phy;
-void mdio_env(){ int mdc=cA(); int mdio=oA() && phy.out;
+struct Phy { unsigned regs[32]={0}; unsigned addr=1; int ones=0, idx=-1, out=1, rd=0, pend=-1, pv=1, delay=0, fight=0; unsigned frame=0; int pmdc=0; } phy;
+void mdio_env(){ int mdc=cA(); int mdio=oA() && phy.out; if(t.p_data__oe__a.get<bool>() && phy.rd==1 && phy.idx>=15) phy.fight++;
   if(phy.pend>0 && --phy.pend==0) phy.out=phy.pv;
   if(mdc && !phy.pmdc){
     if(phy.idx<0){ if(mdio) phy.ones++; else { if(phy.ones>=32){ phy.idx=0; phy.frame=0; } phy.ones=0; } }
     if(phy.idx>=0){ int i=phy.idx; if(i<14) phy.frame=(phy.frame<<1)|mdio;
       if(i==13){ unsigned op=(phy.frame>>10)&3, pa=(phy.frame>>5)&31; phy.rd=(pa!=phy.addr)?0:(op==2?1:(op==1?-1:0)); }
       if(i>=16 && phy.rd==-1) phy.frame=(phy.frame<<1)|mdio;
-      if(i==31){ if(phy.rd==-1) phy.regs[(phy.frame>>16)&31]=phy.frame&0xFFFF; phy.idx=-1; phy.ones=0; phy.rd=0; phy.pv=1; phy.pend=5; }
-      else { phy.idx++; int nx=phy.idx; if(phy.rd==1 && nx>=15){ phy.pv=(nx==15)?0:(int)((phy.regs[phy.frame&31]>>(31-nx))&1); phy.pend=5; } } } }
+      if(i==31){ if(phy.rd==-1) phy.regs[(phy.frame>>16)&31]=phy.frame&0xFFFF; phy.idx=-1; phy.ones=0; phy.rd=0; phy.pv=1; phy.pend=phy.delay; if(!phy.delay) phy.out=1; }
+      else { phy.idx++; int nx=phy.idx; if(phy.rd==1 && nx>=15){ phy.pv=(nx==15)?0:(int)((phy.regs[phy.frame&31]>>(31-nx))&1); phy.pend=phy.delay; if(!phy.delay) phy.out=phy.pv; } } } }
   phy.pmdc=mdc; pin_in=0xFA|mdio|(mdc<<2); }
 
 bool t_mdio(){ bool ok=true; reset_both(); phy=Phy(); phy.regs[2]=0x0022; phy.regs[3]=0x1622; scen=mdio_env;
   auto h4=[](int op,unsigned pa){ return (unsigned)((0x1<<6)|(op<<4)|((pa>>1)&0xF)); };
   unsigned pa=1, reg=4;
-  CH=0; program(cat({I_order(1),I_line(0,0),I_clock(GENERATE,10,2,0,0),I_out(2,1),I_wdog(5000),I_start(0xFF,8,0,1),I_hdr(1,0xFF,8,0,1),I_hdr(2,0xFF,8,0,1),I_hdr(3,0xFF,8,0,1),
+  CH=0; program(cat({I_order(1),I_line(0,0),I_clock(GENERATE,10,2,0,0),I_out(1,1),I_wdog(5000),I_start(0xFF,8,0,1),I_hdr(1,0xFF,8,0,1),I_hdr(2,0xFF,8,0,1),I_hdr(3,0xFF,8,0,1),
     I_hdr(4,h4(1,pa),8,0,1),I_hdr(5,((pa&1)<<7)|(reg<<2)|0x2,8,0,1),I_main(16,1),I_data(8,0x01),I_data(8,0xE1),I_run(2)}));
   idle(3000); wait_return();
   char d[64]; snprintf(d,sizeof d," PHY 1 reg 4 = %04X",phy.regs[4]);
@@ -280,7 +292,8 @@ bool t_mdio(){ bool ok=true; reset_both(); phy=Phy(); phy.regs[2]=0x0022; phy.re
   auto rd=[&](unsigned a,unsigned r){ clear_results(); CH=0; program(cat({I_hdr(4,h4(2,a),8,0,1),I_hdr(5,((a&1)<<5)|r,6,0,1),I_hdr(6,0x2,2,0,0),I_main(16,0),I_run(1)})); idle(3000); wait_return(); };
   rd(1,4); V g1=got[0]; U s1=status[0];
   rd(1,2); V g2=got[0]; U s2=status[0];
-  ok&=report("MDIO clause 22 read: TA from the PHY, 16 data bits",g1==V({{8,0x01},{8,0xE1}})&&g2==V({{8,0x00},{8,0x22}})&&s1==U({1})&&s2==U({1}),show(g1)+" |"+show(g2));
+  char f[48]; snprintf(f,sizeof f," | overlap %d clocks",phy.fight);
+  ok&=report("MDIO read: PHY switching 0 ns after MDC, push-pull MDC",g1==V({{8,0x01},{8,0xE1}})&&g2==V({{8,0x00},{8,0x22}})&&s1==U({1})&&s2==U({1})&&phy.fight==0,show(g1)+" |"+show(g2)+f);
   rd(5,2);
   ok&=report("MDIO read from an absent PHY: no TA, frame aborts",got[0].empty()&&status[0]==U({2}),showst(status[0]));
   return ok; }
@@ -313,23 +326,24 @@ bool t_sdcard(){ bool ok=true; reset_both(); card=Card(); scen=sd_env;
   ok&=cmd({0x48,0,0,0x01,0xAA},"SD card CMD8, CRC-7 87, R7 echoes 1AA",{0x48,0,0,0x01,0xAA,0x87},{0x01,0x00,0x00,0x01,0xAA});
   return ok; }
 
-struct Spi3 { unsigned regs[128]={0}; int pcs=1, psck=0, n=0, out=1, rd=0; unsigned addr=0, sh=0; } s3;
-void spi3_env(){ int sck=cA(); int cs=t.p_select__out__a.get<bool>(); int sdio=oA() && s3.out;
+struct Spi3 { unsigned regs[128]={0}; int pcs=1, psck=0, n=0, out=1, rd=0, drv=0, fight=0; unsigned addr=0, sh=0; } s3;
+void spi3_env(){ int sck=cA(); int cs=t.p_select__out__a.get<bool>(); int chip=t.p_data__oe__a.get<bool>(); if(chip && s3.drv) s3.fight++; int sdio=chip? (int)t.p_data__out__a.get<bool>() : (s3.drv? s3.out : 1);
   if(s3.pcs && !cs){ s3.n=0; s3.sh=0; s3.out=1; s3.rd=0; }
   if(!cs && sck && !s3.psck){ s3.sh=((s3.sh<<1)|sdio)&0xFF; s3.n++;
     if(s3.n==8){ s3.rd=(s3.sh>>7)&1; s3.addr=s3.sh&0x7F; }
     else if(s3.n>8 && (s3.n%8)==0 && !s3.rd){ s3.regs[s3.addr++&0x7F]=s3.sh; } }
-  if(!cs && !sck && s3.psck && s3.rd && s3.n>=8){ int k=s3.n-8; unsigned v=s3.regs[(s3.addr+k/8)&0x7F]; s3.out=(v>>(7-k%8))&1; }
-  if(cs) s3.out=1;
+  if(!cs && !sck && s3.psck && s3.rd && s3.n>=8){ int k=s3.n-8; unsigned v=s3.regs[(s3.addr+k/8)&0x7F]; s3.out=(v>>(7-k%8))&1; s3.drv=1; }
+  if(cs){ s3.out=1; s3.drv=0; }
   s3.pcs=cs; s3.psck=sck; pin_in=0xFA|sdio|(sck<<2); }
 
 bool t_spi3(){ bool ok=true; reset_both(); s3=Spi3(); scen=spi3_env; unsigned reg=0x34;
-  CH=0; program(cat({I_order(1),I_line(0,0),I_clock(GENERATE,25,2,0,0),I_out(2,1),I_wdog(5000),I_start(0,0,0,1),I_hdr(1,reg&0x7F,8,0,1,2),I_hdr(2,reg|0x80,8,0,1,1),I_main(16,2)}));
+  CH=0; program(cat({I_order(1),I_line(0,0),I_clock(GENERATE,25,2,0,0),I_out(1,1),I_wdog(5000),I_start(0,0,0,1),I_hdr(1,reg&0x7F,8,0,1,2),I_hdr(2,reg|0x80,8,0,1,1),I_main(16,2)}));
   program(cat({I_data(8,0x5A),I_data(8,0xC3),I_run(2)})); idle(2000); wait_return();
   char d[64]; snprintf(d,sizeof d," device regs 34,35 = %02X %02X",s3.regs[0x34],s3.regs[0x35]);
   ok&=report("3-wire SPI write: address byte, 2 data bytes on one SDIO line",s3.regs[0x34]==0x5A&&s3.regs[0x35]==0xC3&&status[0]==U({1}),d);
   s3.regs[0x34]=0x9E; s3.regs[0x35]=0x07; clear_results(); program(I_run(1)); idle(2000); wait_return();
-  ok&=report("3-wire SPI read: same program, RUN READ turns the line around",got[0]==V({{8,0x9E},{8,0x07}})&&status[0]==U({1}),show(got[0]));
+  char f[48]; snprintf(f,sizeof f," | both driving: %d clocks",s3.fight);
+  ok&=report("3-wire SPI read: push-pull, chip releases SDIO for the read",got[0]==V({{8,0x9E},{8,0x07}})&&status[0]==U({1})&&s3.fight==0,show(got[0])+f);
   return ok; }
 
 bool t_dali(){ const long T=41666; bool ok=true; reset_both();
@@ -341,13 +355,12 @@ bool t_dali(){ const long T=41666; bool ok=true; reset_both();
   bool stop=true; long late=0; for(size_t k=s+17*T;k<s+19*T && k<tr.size();k++) if(!tr[k]){ late++; if(k>s+17*T+T/8) stop=false; }
   char d[96]; snprintf(d,sizeof d," start %u, address %02X, command %02X, released %ld clocks after the last bit",(v>>16)&1,(v>>8)&0xFF,v&0xFF,late);
   ok&=report("DALI forward frame: Manchester 1200 bit/s, start + 16 bits MSB first",okb&&nb==17&&v==0x10390&&stop&&status[1]==U({1}),d);
-  reset_both(); CH=0; program(cat({I_order(1),I_line(0,0),I_clock(ASYNC,(unsigned)(T/2)),I_start(0x1,2,0,0,0),I_main(16,0),I_run(0)}));
+  reset_both(); CH=0; program(cat({I_order(1),I_line(3,0,0,0,0,0,1),I_clock(ASYNC,(unsigned)T),I_start(1,1,0,0,0),I_main(8,0),I_run(0)}));
   unsigned back=0xA5; m0.add(1,T*10); auto mb=[&](int b){ m0.add(b?0:1,T/2); m0.add(b?1:0,T/2); }; mb(1); for(int i=7;i>=0;i--) mb((back>>i)&1); m0.add(1,T*3);
   scen=[&]{ pin_in=0xFE|m0.step(); }; run_model(m0,T);
-  unsigned halves=got[0].size()==2? (got[0][0].second<<8)|got[0][1].second : 0, dec=0; bool pairs=true;
-  for(int i=0;i<8;i++){ unsigned p2=(halves>>(14-2*i))&3; if(p2==1) dec=(dec<<1)|1; else if(p2==2) dec<<=1; else pairs=false; }
-  char d2[96]; snprintf(d2,sizeof d2," half-bits %04X -> backward frame %02X",halves,dec);
-  ok&=report("DALI backward frame: half-bit sampling, host pairs the halves",pairs&&dec==back&&status[0]==U({1}),d2);
+  ok&=report("DALI backward frame: Manchester decoder, first edge = bit boundary",got[0]==V({{8,back}})&&status[0]==U({1}),show(got[0]));
+  m0=Wave(); clear_results(); m0.add(1,T*30); mb(1); for(int i=7;i>=0;i--) mb((0x3C>>i)&1); m0.add(1,T*3); run_model(m0,T);
+  ok&=report("DALI: a second backward frame after idle",got[0]==V({{8,0x3C}})&&status[0]==U({1}),show(got[0]));
   return ok; }
 
 std::vector<int> stuff5(const std::vector<int>&raw){ std::vector<int> o; int run=0,last=-1; for(int b:raw){ o.push_back(b); if(b==last) run++; else { run=1; last=b; } if(run==5){ int x=!b; o.push_back(x); last=x; run=1; } } return o; }
@@ -385,9 +398,49 @@ bool t_can_ext(){ const long P=200; bool ok=true; unsigned id=(2u<<26)|(127250u<
   ok&=report("CAN 2.0B extended chip to chip: B sends with CRC, A checks and ACKs",body&&cok&&ack&&!got[0].empty()&&got[0].back()==std::make_pair(14u,3u)&&status[0]==U({1})&&status[1]==U({1}),d);
   return ok; }
 
+bool t_rc5(){ const long T=88900; bool ok=true; unsigned addr=5, cmd=0x35, tog=1;
+  std::vector<int> bits={1,1,(int)tog}; for(int i=4;i>=0;i--) bits.push_back((addr>>i)&1); for(int i=5;i>=0;i--) bits.push_back((cmd>>i)&1);
+  reset_both(); CH=0; program(cat({I_order(1),I_line(3,0,0,0,1),I_clock(RECOVER,(unsigned)T),I_start(0x3,2,0,0,0),I_main(12,0),I_run(0)}));
+  m0.add(1,T*4); for(int b:bits){ m0.add(b,T/2); m0.add(!b,T/2); } m0.add(1,T*4);
+  scen=[&]{ pin_in=0xFE|m0.step(); }; run_model(m0,T);
+  unsigned v1=0,v2=0; for(int i=2;i<10;i++) v1=(v1<<1)|(unsigned)bits[i]; for(int i=10;i<14;i++) v2=(v2<<1)|(unsigned)bits[i];
+  ok&=report("RC5 infrared receive: 1.778 ms bits (DIV 88900, above 16 bits)",got[0]==V({{8,v1},{4,v2}})&&status[0]==U({1}),show(got[0]));
+  reset_both(); CH=1; program(cat({I_order(1),I_line(3,3),I_clock(ASYNC,(unsigned)T),I_out(3,0),I_start(0x3,2,0,1),I_main(12,1)}));
+  scen=[&]{ int b=oB(); tr.push_back(b); pin_in=0xF7|(b<<3); };
+  tx_run(1,{{8,v1},{4,v2}},2); wait_status(1,1); idle(T*16);
+  size_t rise=0; for(size_t k=1;k<tr.size();k++) if(!tr[k-1] && tr[k]){ rise=k; break; }
+  size_t s0=rise-T/2; std::vector<int> got_bits; bool clean=true;
+  for(int k=0;k<14;k++){ size_t a=s0+k*T+T/4, b=s0+k*T+3*T/4; if(b>=tr.size()){ clean=false; break; } if(tr[a]==tr[b]) clean=false; got_bits.push_back(tr[b]); }
+  char d[64]; snprintf(d,sizeof d," 14 bits %s, toggle %d, address %u, command %02X",clean?"clean":"BAD",got_bits.size()>2?got_bits[2]:-1,addr,cmd);
+  ok&=report("RC5 transmit: carrier-enable envelope for an IR LED driver",clean&&got_bits==bits&&status[1]==U({1}),d);
+  return ok; }
+
+bool t_kline5(){ const long S=40, W=2500000/S, D=4808; bool ok=true;
+  reset_both();
+  unsigned blk[5]={0xF0,0x0F,0xF0,0x0F,0xF0};
+  CH=0; program(cat({I_line(0,0),I_clock(ASYNC,(unsigned)W),I_out(2,1),I_start(blk[0],8,0,1),I_hdr(1,blk[1],8,0,1),I_hdr(2,blk[2],8,0,1),I_hdr(3,blk[3],8,0,1),I_hdr(4,blk[4],8,0,1),
+    I_main(1,1),I_branch(0,KEEP,KEEP,1,0,0,0)}));
+  CH=1; program(cat({I_line(0,0),I_clock(ASYNC,D),I_out(2,1),I_start(0,1,0,1),I_main(9,1)}));
+  scen=[&]{ int bus=oA() && oB() && m0.step(); tr.push_back(bus); pin_in=0xFE|bus; };
+  CH=0; program(cat({I_data(1,1),I_run(2)}));
+  for(long i=0;i<20000000 && status[0].empty();i++) clk();
+  size_t init_end=tr.size();
+  CH=0; program(cat({I_clear(),I_line(0,0),I_clock(ASYNC,D),I_start(0,1,0,0,0),I_main(9,0),I_run(0)}));
+  m0.add(1,(long)(100*50000/S)); uwave(m0,0x55,D,8,0,1); m0.add(1,D*2); uwave(m0,0x08,D,8,0,1); m0.add(1,D*2); uwave(m0,0x08,D,8,0,1);
+  while(m0.busy()) clk(); idle(D*12);
+  CH=1; program(cat({I_data(8,0xF7),I_data(1,1),I_run(0)})); wait_status(1,1); idle(D*12);
+  m0.add(1,30*50000/S); uwave(m0,0xCC,D,8,0,1); run_model(m0,D*12);
+  size_t s0=first_fall(tr); std::vector<uint8_t> init(tr.begin(),tr.begin()+init_end); auto f=udecode(init,4*W,8,0,1,0,1);
+  long bitlen=low_run(tr,s0,0,nullptr);
+  U rx; for(auto&x:got[0]) if(x.first==8) rx.push_back(x.second);
+  char d[96]; snprintf(d,sizeof d," address byte%s, start bit %.1f ms (scaled 1/%ld)",hexs(values(f)).c_str(),bitlen/50000.0,S);
+  ok&=report("K-Line 5-baud init: address 33 sent at 5 bit/s (4 samples per bit)",values(f)==U({0x33})&&all_ok(f)&&std::labs(bitlen-4*W)<=W/100,d);
+  ok&=report("K-Line 5-baud: sync 55, key bytes 08 08, tester F7, ECU CC",rx==U({0x55,0x08,0x08,0xF7,0xCC}),hexs(rx));
+  return ok; }
+
 typedef bool(*TestFn)();
 struct T { const char*key; TestFn fn; };
-std::vector<T> tests={{"rs485",t_rs485},{"midi",t_midi},{"nmea0183",t_nmea0183},{"profibus",t_profibus},{"modbus",t_modbus},{"dmx",t_dmx},{"lin",t_lin},{"kline",t_kline},{"sdi12",t_sdi12},{"smbus",t_smbus},{"mdio",t_mdio},{"sdcard",t_sdcard},{"spi3",t_spi3},{"dali",t_dali},{"can_ext",t_can_ext}};
+std::vector<T> tests={{"rs485",t_rs485},{"midi",t_midi},{"nmea0183",t_nmea0183},{"profibus",t_profibus},{"modbus",t_modbus},{"dmx",t_dmx},{"lin",t_lin},{"kline",t_kline},{"kline5",t_kline5},{"sdi12",t_sdi12},{"smbus",t_smbus},{"mdio",t_mdio},{"sdcard",t_sdcard},{"spi3",t_spi3},{"dali",t_dali},{"can_ext",t_can_ext},{"rc5",t_rc5}};
 
 int main(int argc,char**argv){ env=env_std; pin_in=0xFF; power_on(); program(I_link(4)); RET_R=4; bool ok=true;
   for(auto&x:tests){ if(argc>1 && strcmp(argv[1],x.key)) continue; printf("== %s\n",x.key); ok&=x.fn(); }

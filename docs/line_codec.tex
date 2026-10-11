@@ -127,6 +127,7 @@ Word & Bits & RTL name & Instruction field \\
 \midrule
 \sig{line\_config} & 15:13 & \sig{code} & \sig{LINE} \sig{CODE}: 0 NRZ, 1 NRZI, 2 NRZI pair, 3 Manchester, 4 Manchester Thomas \\
  & 12 & \sig{inv} & \sig{INV} \\
+ & 11 & \sig{boundary} & \sig{BND}: Manchester, first edge after idle is a bit boundary (v0.7) \\
  & 10:8 & \sig{pinA} & \sig{PIN\_A}, the data pin \\
  & 7 & \sig{stuffAny} & \sig{SANY}: stuffing counts runs of either value \\
  & 6:3 & \sig{stuffLen} & \sig{STUFF}: run length, 0 = off \\
@@ -137,7 +138,7 @@ Word & Bits & RTL name & Instruction field \\
  & 27 & \sig{clockIdle} & \sig{IDLE}: generated clock level between frames \\
  & 26:24 & \sig{clockPin} & \sig{PIN}: clock input, or the read-back of a generated clock \\
  & 23:22 & \sig{endSel} & \sig{ETK}: what \sig{end\_tick} is \\
- & 15:0 & \sig{div} & \sig{DIV}: clocks per bit (timed) or per half period (generated) \\
+ & 21:16, 15:0 & \sig{div} & \sig{DIV}, 22 bits (v0.7): clocks per bit (timed) or per half period (generated) \\
 \midrule
 \sig{out\_config} & 7:6 & \sig{drive} & \sig{DRIVE}: 0 off, 1 push-pull while sending, 2 open drain, 3 push-pull always \\
  & 5 & \sig{outIdle} & \sig{IDLE}: data level between frames \\
@@ -164,7 +165,7 @@ Signal & Definition & Meaning \\
 \sig{pairCode} & \sig{code} = 2 & NRZI on a differential pair; SE0 and SE1 detected. \\
 \sig{openDrain} & \sig{drive} = 2 & Drive low for 0, release for 1, on data and clock. \\
 \sig{i2cTarget} & \sig{i2c} and \sig{source} = SYNC & I\textsuperscript{2}C target: SCL is an input. \\
-\sig{half} & \sig{div} $\gg$ 1 & Half a bit. \\
+\sig{half} & \sig{div} $\gg$ 1 & Half a bit. All the timers are 22 bits wide, like \sig{div}, so the slowest bit is 4\,194\,303 clocks (84\,ms at 50\,MHz). \\
 \sig{blank} & $\lfloor 3\,\sig{div} / 4 \rfloor$ & Manchester edge blanking window. \\
 \sig{twoBits} & 2 $\times$ \sig{div} & Manchester lock timeout, and the length of the end of packet. \\
 \bottomrule
@@ -230,13 +231,16 @@ An edge always marks a bit boundary, so the timer restarts there, and the sample
 A Manchester bit always has an edge in its middle, and has an extra edge at its boundary when two equal bits follow each other. The decoder must use the middle edges and ignore the boundary ones. It does that with a blanking window instead of a sample point:
 
 \begin{lstlisting}
-strobe = aEdge && (!locked || rxCount > blank)      blank = 3/4 of a bit
+strobe = aEdge && (locked ? rxCount > blank : !boundary)     blank = 3/4 of a bit
 on strobe:   rxCount <= 1, locked <= 1
+first edge after idle with BND set:  rxCount <= half, locked <= 1, no bit
 otherwise:   rxCount counts up (saturating); locked <= 0 after two bit times
 bit value  = lineA ^ thomas                         the level after the edge
 \end{lstlisting}
 
 After an accepted (middle) edge, any edge within $\frac34$ of a bit is a boundary edge and is ignored; the next middle edge comes one bit later, well past the window. If the line goes quiet for two bit times, \sig{locked} drops and the next edge is accepted at once, which is how the decoder catches the first edge of a frame. With IEEE convention a low-to-high middle edge is a 1, so the level after the edge is the bit; Thomas convention inverts it.
+
+\paragraph{The first edge after idle (v0.7).} Taking the first edge as a middle edge is right when a frame begins with a preamble (10BASE-T) or with a bit whose first half equals the idle level (RC5). It is wrong when the first bit's first half differs from idle, as in DALI, whose start bit falls from the idle-high bus at the bit boundary: the decoder would then lock half a bit out of phase. With \sig{BND} set, the first edge after idle produces no bit; it sets \sig{rxCount} to half a bit and \sig{locked}, so the middle edge half a bit later sees \sig{rxCount} at a full bit, passes the window, and is decoded as the first bit. One edge after idle cannot tell the two cases apart by timing alone, because a boundary edge also follows a middle edge whenever two equal bits are sent, which is why this is a setting rather than automatic.
 
 The window must sit strictly between half a bit (a boundary edge) and one bit (the next middle edge), with room for jitter. At 4 clocks per bit, $\frac34$ is 3 clocks and a boundary edge 2 clocks after a middle edge is too close to call once jitter is added, so 5 clocks per bit is the minimum (10BASE-T at 50\,MHz).
 
@@ -399,6 +403,7 @@ Generated & Two phases of \sig{div} clocks each. Phase A (\sig{phaseB} = 0) hold
 \item \sig{sampleLeading} says whether the chain samples on the A-to-B edge (the middle of the bit) or on the B-to-A edge (the end). It is true when \sig{edgeSel} is ``both'', or when the chosen edge is the one that leaves the idle level. SPI modes 0 and 3 sample on the leading edge; modes 1 and 2 on the trailing one. \sig{genTick} pulses on the chosen edge, which is how the chain gets its tick in this mode.
 \item Clock stretching: in phase B, with open drain, the codec has released the clock and waits until the clock read-back (\sig{clockIn}, the clock pin) is actually high (\sig{clockHigh}) before it starts counting. A slow I\textsuperscript{2}C device holding SCL low therefore just lengthens the bit.
 \item The clock only runs while there is something to do: a bit to send (\sig{T\_BIT}) or a read block listening (\sig{T\_READ}). Between bytes on I\textsuperscript{2}C the controller holds SCL low.
+\item Where the sample falls. \sig{genTick} is registered and the input pins are three clocks late, so with a push-pull clock the chain sees the line as it was about one system clock before the chip's sampling edge, which suits any device that changes its output on or after that edge (MDIO, SPI). With an open-drain clock the codec first waits for the read-back to show the clock high, so the sample is taken just after the edge; I\textsuperscript{2}C needs this because a target may change SDA while it stretches SCL.
 \end{itemize}
 
 \begin{center}
@@ -521,7 +526,7 @@ State & \sig{level} (data) & \sig{clockLevel} \\
 \toprule
 Output & Value & Enable \\
 \midrule
-data & push-pull: \sig{dataPin}; open drain: 0 & push-pull always (\sig{drive} 3), or while \sig{sending} (\sig{drive} 1); open drain: when \sig{dataPin} is 0 \\
+data & push-pull: \sig{dataPin}; open drain: 0 & push-pull always (\sig{drive} 3), or while \sig{driveNow} (\sig{drive} 1); open drain: when \sig{dataPin} is 0 \\
 pair & \sig{!(level \^{} inv)}, or 0 during SE0 & as push-pull data, if \sig{pair} is set \\
 clock & push-pull: \sig{clockLevel}; open drain: 0 & generated clock and \sig{drive} not off; open drain: when \sig{clockLevel} is 0 \\
 select & \sig{selectActive}, inverted unless \sig{csH} & no enable (a plain output) \\
@@ -529,7 +534,7 @@ select & \sig{selectActive}, inverted unless \sig{csH} & no enable (a plain outp
 \end{tabularx}
 \end{center}
 
-\sig{sending} is any state other than idle and wait, or an active packet. \sig{selectActive} covers the whole frame: from START (\sig{in\_frame}) through every queued and in-flight bit (\sig{nextValid}, \sig{!line\_free}), so SPI chip select never glitches between entries. With \sig{drive} = 0, after reset or \sig{CLEAR}, nothing but select is driven.
+\sig{sending} is any state other than idle and wait, or an active packet. \sig{driveNow} (v0.7) is \sig{sending} except in \sig{T\_READ} and, with a generated clock, in \sig{T\_IDLE}: a ``push-pull while sending'' output lets go of the line for read bits, so a device can answer on the same wire (3-wire SPI, MDIO). Timed lines still hold their level between entries of a packet. \sig{selectActive} covers the whole frame: from START (\sig{in\_frame}) through every queued and in-flight bit (\sig{nextValid}, \sig{!line\_free}), so SPI chip select never glitches between entries. With \sig{drive} = 0, after reset or \sig{CLEAR}, nothing but select is driven.
 
 %=====================================================================
 \section{Checks reported to the chain}
@@ -583,6 +588,7 @@ SYNC & the sampling edge \\
 \item \textbf{Seamless transmit} needs the next entry waiting before the current one ends; otherwise the line pauses for at least one clock and a timed bit is stretched.
 \item \textbf{The wait entry} needs a timed, non-Manchester line, because it aligns to the receive bit timer; elsewhere it is skipped.
 \item \textbf{One data pin per codec.} \sig{PIN\_A} is the only decoded pin; other pins are seen raw.
+\item \textbf{Bit rate range.} With the 22-bit \sig{div}, from 12\,bit/s up to the per-code minimums above, at 50\,MHz.
 \end{itemize}
 
 %=====================================================================
@@ -606,7 +612,7 @@ Random programs through the codec & \sig{t\_random}, \sig{t\_random\_branch} \\
 \end{tabularx}
 \end{center}
 
-Not yet exercised by a test: single-ended NRZI (code 1) and Thomas Manchester (code 4). They use the same paths as the tested codes with one gate different. The codec has no formal proof yet; its state space (a 16-bit timer, two counters and the transmit machine) is the next candidate, probably split into a receive proof and a transmit proof.
+The v0.7 additions are tested in \sig{t\_standards}: the wide divider by RC5 (88\,900 clocks per bit) and the K-Line 5-baud init, \sig{BND} by DALI, release-while-reading by 3-wire SPI and MDIO with checks that the chip and the device never drive at the same time. Not yet exercised by a test: single-ended NRZI (code 1) and Thomas Manchester (code 4). They use the same paths as the tested codes with one gate different. The codec has no formal proof yet; its state space (a 22-bit timer, two counters and the transmit machine) is the next candidate, probably split into a receive proof and a transmit proof.
 
 %=====================================================================
 \appendix
@@ -635,7 +641,9 @@ Signal & Meaning \\
 \sig{i2cBusy} & I\textsuperscript{2}C controller has sent START and not yet STOP. \\
 \sig{idleHold}, \sig{idleLevel} & Whether to hold the last level, and the level used when not sending a bit. \\
 \sig{lastSample} & Previous sample, for NRZI. \\
-\sig{locked} & Manchester decoder has a recent middle edge. \\
+\sig{locked} & Manchester decoder has a recent middle edge (or, with \sig{boundary}, has seen the first edge after idle). \\
+\sig{boundary} & \sig{BND}: first edge after idle is a bit boundary. \\
+\sig{driveNow} & ``Push-pull while sending'' output is driving now. \\
 \sig{nextValid}, \sig{nextLen}, \sig{nextData} & The waiting entry. \\
 \sig{nrziLevel} & Current NRZI line level for transmit. \\
 \sig{packetActive} & Inside a transmitted packet. \\

@@ -49,10 +49,11 @@ Host link & UART in (auto-baud), UART out (rate set by \sig{LINK}) \\
 Standards verified & UART, SPI (controller and target), I\textsuperscript{2}C (controller and target), PS/2, \\
  & 10BASE-T receive, Manchester transmit, USB low speed receive and transmit, \\
  & SWD-style acknowledge handling, CAN-style arbitration, \\
- & CAN with bit stuffing, CRC-15 and acknowledge, USB CRC-5/CRC-16 and handshake \\
-Logic & 15,513 cells after synthesis, 19,737 after place and route (35\,\% utilisation) \\
+ & CAN with bit stuffing, CRC-15 and acknowledge, USB CRC-5/CRC-16 and handshake, \\
+ & and 16 more in \sig{t\_standards} (RS-485 to RC5 infrared) \\
+Logic & 18,366 cells after synthesis (IHP SG13G2, ISA v0.7); the last place and route, before the CRC unit, had 15,513 and 19,737 (35\,\% utilisation) \\
 Timing & closed after routing: 17.7\,ns worst path at 1.08\,V, 125\,$^\circ$C (20\,ns budget) \\
-Instruction set & ISA v0.6 (separate document: \emph{ProEm Instruction Set}) \\
+Instruction set & ISA v0.7 (separate document: \emph{ProEm Instruction Set}) \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -66,7 +67,7 @@ ProEm is an open-source protocol emulator ASIC. The chip lets an RP2040 speak ma
 
 The design has four parts:
 \begin{enumerate}
-\item \textbf{Host side.} A UART receiver with auto-baud feeds the control unit, which decodes ISA v0.6 instructions into registered configuration writes. A return path sends received data, frame status and link events back on a second UART.
+\item \textbf{Host side.} A UART receiver with auto-baud feeds the control unit, which decodes ISA v0.7 instructions into registered configuration writes. A return path sends received data, frame status and link events back on a second UART.
 \item \textbf{Input pipeline.} Every input pin passes through two synchroniser flip-flops and one more register before any logic uses it.
 \item \textbf{Two channels.} Each channel has a host FIFO for write data, a \emph{frame chain} that runs the frame, an \emph{entry dispatcher}, and a \emph{line codec} that turns pins into bits and ticks, and bits into pin levels.
 \item \textbf{Outputs.} Each channel drives a data output, a pair output (the complement, for USB D$-$), a clock output and a select output, each with an output enable. Bidirectional pads are read back through the input pins.
@@ -366,7 +367,7 @@ Test & What it checks & Result \\
 \sig{t\_i2c\_target} & Chip as I\textsuperscript{2}C target at 0x42 against a controller model: write of two bytes, read of two bytes (branch to write, controller NACK), wrong address (no ACK, abort), register write then repeated START and read; SCL at 417\,kHz and 1\,MHz & Pass \\
 \sig{t\_branch} & SWD-style acknowledge: OK continues to 33 data bits, WAIT and FAULT abort with the acknowledge returned. CAN-style arbitration on an open-drain line against a node model: the chip wins, the chip loses and releases the line within the bit, and the channel is reusable afterwards & Pass \\
 \sig{t\_stream} & Underrun: 8 of 32 bits loaded on a UART line aborts with status \texttt{22}. UART stream of 12 bytes (36 entries) fed while the frame runs. SPI stream of 20 bytes with the generated clock pausing & Pass \\
-\sig{t\_standards} & Fifteen further standards, receive and transmit, each against a model of the other side: RS-232/422/485 (driver enable on the select output), MIDI, NMEA 0183, PROFIBUS DP, Modbus RTU, DMX512 (break detection by a framing abort), LIN master and slave, K-Line fast init, SDI-12, SMBus with PEC, MDIO, SD card CMD0 and CMD8 with the CRC-7 from the chip, 3-wire SPI, DALI and CAN 2.0B extended frames (NMEA 2000). The programs are listed in the \emph{Standards Programming Guide} & Pass \\
+\sig{t\_standards} & Sixteen further standards, receive and transmit, each against a model of the other side (42 checks): RS-232/422/485 (driver enable on the select output), MIDI, NMEA 0183, PROFIBUS DP, Modbus RTU (CRC checked on chip with \sig{BYTE} and \sig{SPAN}), DMX512 (break detection by a framing abort), LIN master and slave (seeking header across a gap), K-Line fast and 5-baud init, SDI-12, SMBus with PEC (checked on chip), MDIO (PHY switching 0\,ns after MDC, push-pull), SD card CMD0 and CMD8 with the CRC-7 from the chip, 3-wire SPI (push-pull, no overlap), DALI (Manchester decoder with boundary lock), CAN 2.0B extended frames (NMEA 2000) and RC5 infrared (1.778\,ms bits, 22-bit divider). The programs are listed in the \emph{Standards Programming Guide} & Pass \\
 \sig{t\_crc} & USB DATA0 receive with CRC-16: good packet answered with an ACK handshake 3 bit times after the end of packet, corrupted packet gets no reply, next packet good again; USB token CRC-5 good and bad; USB DATA1 transmit with CRC-16 appended and inverted, decoded by a model; CAN frame with bit stuffing from a node model, CRC-15 good (dominant ACK in the ACK slot), corrupted (no ACK), and a heavily stuffed ID; CAN chip to chip on a wired-AND bus, B appends the CRC and A checks it and acknowledges; 60 random CRCs (width 1--16, random polynomial, init, inversion, bit order and length, a third corrupted on the wire) looped from B to A & Pass \\
 \sig{t\_random\_branch} & 600 random branch programs (3 seeds $\times$ 100, both bit orders): a capture-any header of 1--8 bits, random mask and value (half forced to match), random hit and miss actions, random base run mode, read-group and write-group headers; checks the path taken, the captures and the status byte & Pass \\
 \bottomrule

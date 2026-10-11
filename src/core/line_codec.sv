@@ -60,13 +60,14 @@ logic [1:0] source;
 logic [1:0] edgeSel;
 logic [2:0] clockPin;
 logic [1:0] endSel;
-logic [15:0] div;
-logic [15:0] half;
-logic [17:0] blankSum;
-logic [15:0] blank;
-logic [16:0] twoBits;
+logic [21:0] div;
+logic [21:0] half;
+logic [23:0] blankSum;
+logic [21:0] blank;
+logic [22:0] twoBits;
 logic [1:0] drive;
 logic inv;
+logic boundary;
 logic stuffAny;
 logic clockIdle;
 logic outIdle;
@@ -83,7 +84,7 @@ logic thomas;
 logic openDrain;
 logic i2cTarget;
 
-logic [15:0] rxCount;
+logic [21:0] rxCount;
 logic [3:0] runCount;
 logic [7:0] viewPins;
 logic lineA;
@@ -131,8 +132,8 @@ typedef enum logic [2:0] {
 
 txState state;
 
-logic [15:0] txCount;
-logic [16:0] eopLength;
+logic [21:0] txCount;
+logic [22:0] eopLength;
 logic [7:0] shiftData;
 logic [7:0] dataAfter;
 logic [7:0] nextData;
@@ -182,9 +183,11 @@ logic idleHold;
 logic [6:0] waitBits;
 logic waitAligned;
 logic idleLevel;
+logic driveNow;
 
 assign code = line_config[15:13];
 assign inv = line_config[12];
+assign boundary = line_config[11];
 assign pinA = line_config[10:8];
 assign stuffAny = line_config[7];
 assign stuffLen = line_config[6:3];
@@ -194,7 +197,7 @@ assign edgeSel = clock_config[29:28];
 assign clockIdle = clock_config[27];
 assign clockPin = clock_config[26:24];
 assign endSel = clock_config[23:22];
-assign div = clock_config[15:0];
+assign div = {clock_config[21:16], clock_config[15:0]};
 assign drive = out_config[7:6];
 assign outIdle = out_config[5];
 assign pairEnable = out_config[4];
@@ -212,7 +215,7 @@ assign openDrain = (drive == 2'd2);
 assign i2cTarget = i2c && (source == SRC_SYNC);
 assign half = div >> 1;
 assign blankSum = {2'd0, div} + {1'b0, div, 1'b0};
-assign blank = blankSum[17:2];
+assign blank = blankSum[23:2];
 assign twoBits = {div, 1'b0};
 
 assign rawA = pins[pinA];
@@ -226,7 +229,7 @@ assign syncTick = (edgeSel == 2'd0 && clockRise) || (edgeSel == 2'd1 && clockFal
 assign se0 = pairCode && !rawA && !lineB;
 assign se1 = pairCode && rawA && lineB;
 
-assign strobe = timed && (manchester ? (aEdge && (!locked || rxCount > blank)) : (rxCount == half));
+assign strobe = timed && (manchester ? (aEdge && (locked ? (rxCount > blank) : !boundary)) : (rxCount == half));
 assign bitValue = manchester ? (lineA ^ thomas) : (nrzi ? (lineA == lastSample) : lineA);
 assign dataValid = strobe && !se0 && !se1;
 assign stuffOn = stuffLen != 4'd0;
@@ -264,10 +267,13 @@ always_ff @(posedge clk or negedge rst_n) begin
 			locked <= 1'b0;
 		end else if (manchester) begin
 			if (strobe) begin
-				rxCount <= 16'd1;
+				rxCount <= 22'd1;
+				locked <= 1'b1;
+			end else if (aEdge && !locked && boundary) begin
+				rxCount <= half;
 				locked <= 1'b1;
 			end else begin
-				if (rxCount != 16'hFFFF) begin
+				if (rxCount != 22'h3FFFFF) begin
 					rxCount <= rxCount + 1'b1;
 				end
 				if ({1'b0, rxCount} >= twoBits) begin
@@ -275,7 +281,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 				end
 			end
 		end else if (aEdge) begin
-			rxCount <= 16'd1;
+			rxCount <= 22'd1;
 		end else if (rxCount >= div - 1'b1) begin
 			rxCount <= '0;
 		end else begin
@@ -690,9 +696,10 @@ assign i2c_target = i2cTarget;
 assign i2c_start = i2cTarget && prevRaw && !rawA && clockIn && prevClock;
 assign i2c_stop = i2cTarget && !prevRaw && rawA && clockIn && prevClock;
 assign data_out = openDrain ? 1'b0 : dataPin;
-assign data_oe = openDrain ? !dataPin : ((drive == 2'd3) || (drive == 2'd1 && sending));
+assign driveNow = sending && (state != T_READ) && !(generating && (state == T_IDLE));
+assign data_oe = openDrain ? !dataPin : ((drive == 2'd3) || (drive == 2'd1 && driveNow));
 assign pair_out = se0Out ? 1'b0 : !(level ^ inv);
-assign pair_oe = pairEnable && ((drive == 2'd3) || (drive == 2'd1 && sending));
+assign pair_oe = pairEnable && ((drive == 2'd3) || (drive == 2'd1 && driveNow));
 assign clock_out = openDrain ? 1'b0 : clockLevel;
 assign clock_oe = generating && (drive != 2'd0) && (openDrain ? !clockLevel : 1'b1);
 assign select_out = selectHigh ? selectActive : !selectActive;
