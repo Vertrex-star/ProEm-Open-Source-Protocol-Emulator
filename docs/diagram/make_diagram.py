@@ -162,7 +162,8 @@ cards=[("UART",["ASYNC timer · NRZ","RX from a sender 2 % off rate","TX on the 
 for i,(nm,ls,k) in enumerate(cards):
     x=60+i*337
     box(x,1578,324,140,nm,ls,k,22,13.5)
-T(60,1750,"plus 1,800 random programs, 600 random branch programs, 60 random CRCs chip to chip, SWD-style acknowledge, streaming and underrun, and control tests: auto-baud, HALT, CLEAR, LINK, watchdog, error flags",15,C["muted"],anchor="start")
+T(60,1744,"plus 15 more standards, receive and transmit: RS-232/422/485 · MIDI · NMEA 0183 · PROFIBUS DP · Modbus RTU · DMX512 · LIN · K-Line · SDI-12 · SMBus/PMBus · MDIO · SD card · 3-wire SPI · DALI · CAN 2.0B / NMEA 2000",15,C["ink"],anchor="start",w=500)
+T(60,1768,"and 1,800 random programs, 600 random branch programs, 60 random CRCs chip to chip, SWD-style acknowledge, streaming and underrun, control tests: auto-baud, HALT, CLEAR, LINK, watchdog, error flags",15,C["muted"],anchor="start")
 
 T(60,1806,"Where the logic cells go",28,w=700,anchor="start",fam="disp")
 T(372,1806,"IHP cells per block (hierarchical synthesis) · whole design flattened: 17,281 of ~24,000 · layout to be re-closed with the CRC unit",16,C["muted"],anchor="start")
