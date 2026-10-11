@@ -43,7 +43,8 @@ Built for the [Jane Street protocol emulator ASIC competition](https://blog.jane
   * read-back check of the driven pad, for arbitration.
 
 The [design reference](docs/protocol_emulator_design.pdf) explains every block and gives the exact
-instruction bytes for each standard.
+instruction bytes for each standard. The line codec, the most involved block, has its own
+walk-through: [docs/line_codec.pdf](docs/line_codec.pdf).
 
 ## Using the chip
 
