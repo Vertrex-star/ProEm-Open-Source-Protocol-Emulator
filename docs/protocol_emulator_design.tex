@@ -27,13 +27,13 @@
 
 \pagestyle{fancy}
 \fancyhf{}
-\lhead{\small Paul Vincent Bezzina | ProEm - Open Source Protocol Emulator}
+\lhead{\small Paul Vincent Bezzina \textbar{} ProEm - Open Source Protocol Emulator}
 \rhead{\small Design reference v1.0}
 \cfoot{\small\thepage}
 
 \title{ProEm: Protocol Emulator ASIC\\\large Design Reference}
 \author{Paul Vincent Bezzina}
-\date{26 September 2026}
+\date{11 October 2026}
 
 \begin{document}
 \maketitle
@@ -48,10 +48,11 @@ Channels & 2 independent protocol channels, A and B \\
 Host link & UART in (auto-baud), UART out (rate set by \sig{LINK}) \\
 Standards verified & UART, SPI (controller and target), I\textsuperscript{2}C (controller and target), PS/2, \\
  & 10BASE-T receive, Manchester transmit, USB low speed receive and transmit, \\
- & SWD-style acknowledge handling, CAN-style arbitration \\
+ & SWD-style acknowledge handling, CAN-style arbitration, \\
+ & CAN with bit stuffing, CRC-15 and acknowledge, USB CRC-5/CRC-16 and handshake \\
 Logic & 15,513 cells after synthesis, 19,737 after place and route (35\,\% utilisation) \\
 Timing & closed after routing: 17.7\,ns worst path at 1.08\,V, 125\,$^\circ$C (20\,ns budget) \\
-Instruction set & ISA v0.5 (separate document: \emph{ProEm Instruction Set}) \\
+Instruction set & ISA v0.6 (separate document: \emph{ProEm Instruction Set}) \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -65,7 +66,7 @@ ProEm is an open-source protocol emulator ASIC. The chip lets an RP2040 speak ma
 
 The design has four parts:
 \begin{enumerate}
-\item \textbf{Host side.} A UART receiver with auto-baud feeds the control unit, which decodes ISA v0.5 instructions into registered configuration writes. A return path sends received data, frame status and link events back on a second UART.
+\item \textbf{Host side.} A UART receiver with auto-baud feeds the control unit, which decodes ISA v0.6 instructions into registered configuration writes. A return path sends received data, frame status and link events back on a second UART.
 \item \textbf{Input pipeline.} Every input pin passes through two synchroniser flip-flops and one more register before any logic uses it.
 \item \textbf{Two channels.} Each channel has a host FIFO for write data, a \emph{frame chain} that runs the frame, an \emph{entry dispatcher}, and a \emph{line codec} that turns pins into bits and ticks, and bits into pin levels.
 \item \textbf{Outputs.} Each channel drives a data output, a pair output (the complement, for USB D$-$), a clock output and a select output, each with an output enable. Bidirectional pads are read back through the input pins.
@@ -136,6 +137,8 @@ The frame chain is the frame engine: one START block, up to six header blocks an
 \item \textbf{branch\_unit} holds two \sig{BRANCH} rules. When a watched block succeeds, a rule compares its value under a mask and chooses an action: keep the mode, switch to read, switch to write, or abort. A second kind of rule fires when the codec reports that the line read back differently from what the chip drove. The decision is registered, and the chain pauses for that one clock so the next block starts in the new mode. A branch abort keeps the values captured so far and stops the codec driving at once.
 \item \textbf{MAIN} reads bits into bytes, to a count or until END; or writes host entries, splitting them at the frame's bit count and, with the ACK slot on, at byte edges. After each byte it can add one bit the other way (I\textsuperscript{2}C ACK). Its direction is fixed or follows the run mode.
 \item \textbf{END} slides a 16-bit window over one raw pin, or over the D+/D$-$ pair compare: both low (SE0) is a 1, both high (SE1) aborts with a line error. After an abort, START waits until END has matched again, so it never searches inside the rest of a rejected frame.
+\item \textbf{crc\_unit} holds one CRC register of 1 to 16 bits, kept top aligned in 16 bits so every width uses the same shifter. It takes up to 8 bits per clock in wire order: single received bits as they are sampled (after unstuffing), the START value when it matches, and each written entry as it enters the frame buffer. It is reloaded with its initial value whenever no frame is running. Its \sig{good} output compares the register with the residue; its \sig{crc\_out} output is the register, inverted if asked.
+\item \textbf{Tail} runs after MAIN ends, before the frame completes, when the CRC or the reply is configured. It has up to six steps, each done once: the CRC result entry (read frames with check on), two CRC entries of up to 8 bits (write frames with append on), the reply gap, and two reply entries. The result goes into the frame buffer as a host entry; the CRC, gap and reply entries go straight to the codec once every earlier wire entry of the frame has been handed over, so they are never queued behind received data waiting for the return link. The reply is decided at the gap step, after the last received bit has reached the CRC. A rule with \sig{SRC} = 1, \sig{BLOCK} = 1 fires when the result entry is pushed.
 \item \textbf{Watchdog} ends a frame when no bit, host entry or sent entry is seen for a set number of clocks.
 \item \textbf{Frame buffer} holds 16 entries \texttt{\{wire, length, value\}}. Written values are released at once; captured values are released when MAIN starts and dropped on abort. At the end of every frame the chain adds a \emph{status entry} (length 15) with complete, abort, timeout, line error, overflow, underrun, branch-matched and branch-abort flags.
 \end{itemize}
@@ -219,6 +222,7 @@ The return path takes host entries and status entries from both channels and lin
 First byte & Second & Meaning \\
 \midrule
 \texttt{10 C 0 LLLL} & value & Host entry from channel \texttt{C}, length 0--8. Length 0 with value \texttt{02} is a NACK from a writing MAIN \\
+\texttt{10 C 0 1110} & result & CRC result of a read frame: bit 0 good, bit 1 checked. Comes after the frame's data and before its status \\
 \texttt{10 C 0 1111} & flags & End of a frame on channel \texttt{C}: bit 0 complete, 1 abort, 2 timeout, 3 line error, 4 overflow, 5 underrun, 6 branch matched, 7 branch abort \\
 \texttt{11 000000} & flags & Link events: bit 0 \sig{rx\_error}, 1 \sig{cmd\_error}, 2 \sig{DATA} dropped on A, 3 on B \\
 \bottomrule
@@ -232,6 +236,7 @@ void on_return_message(uint8_t head, uint8_t value) {
     if ((head & 0xC0) == 0xC0) { link_events(value); return; }
     int chan = (head >> 5) & 1, len = head & 0x0F;
     if (len == 15) frame_done(chan, value);        /* status flags   */
+    else if (len == 14) crc_result(chan, value);   /* bit 0 good     */
     else           frame_data(chan, len, value);   /* 0..8 bits      */
 }
 \end{lstlisting}
@@ -361,12 +366,13 @@ Test & What it checks & Result \\
 \sig{t\_i2c\_target} & Chip as I\textsuperscript{2}C target at 0x42 against a controller model: write of two bytes, read of two bytes (branch to write, controller NACK), wrong address (no ACK, abort), register write then repeated START and read; SCL at 417\,kHz and 1\,MHz & Pass \\
 \sig{t\_branch} & SWD-style acknowledge: OK continues to 33 data bits, WAIT and FAULT abort with the acknowledge returned. CAN-style arbitration on an open-drain line against a node model: the chip wins, the chip loses and releases the line within the bit, and the channel is reusable afterwards & Pass \\
 \sig{t\_stream} & Underrun: 8 of 32 bits loaded on a UART line aborts with status \texttt{22}. UART stream of 12 bytes (36 entries) fed while the frame runs. SPI stream of 20 bytes with the generated clock pausing & Pass \\
+\sig{t\_crc} & USB DATA0 receive with CRC-16: good packet answered with an ACK handshake 3 bit times after the end of packet, corrupted packet gets no reply, next packet good again; USB token CRC-5 good and bad; USB DATA1 transmit with CRC-16 appended and inverted, decoded by a model; CAN frame with bit stuffing from a node model, CRC-15 good (dominant ACK in the ACK slot), corrupted (no ACK), and a heavily stuffed ID; CAN chip to chip on a wired-AND bus, B appends the CRC and A checks it and acknowledges; 60 random CRCs (width 1--16, random polynomial, init, inversion, bit order and length, a third corrupted on the wire) looped from B to A & Pass \\
 \sig{t\_random\_branch} & 600 random branch programs (3 seeds $\times$ 100, both bit orders): a capture-any header of 1--8 bits, random mask and value (half forced to match), random hit and miss actions, random base run mode, read-group and write-group headers; checks the path taken, the captures and the status byte & Pass \\
 \bottomrule
 \end{tabularx}
 \end{center}
 
-\paragraph{Tiny Tapeout test.} \sig{test/test.py} (cocotb, Icarus Verilog) drives the Tiny Tapeout top level through its pads: auto-baud and the \sig{cmd\_error} event; a UART loopback from channel B's data pad into channel A; an SPI loopback in which channel A generates SCK and MOSI on its pads and channel B samples them back, gated by channel A's chip select; and an I\textsuperscript{2}C loopback in which channel A is the controller and channel B the target at 0x42 on the same open-drain wire. It passes on the RTL and is run on the gate-level netlist by the \sig{gds} workflow.
+\paragraph{Tiny Tapeout test.} \sig{test/test.py} (cocotb, Icarus Verilog) drives the Tiny Tapeout top level through its pads: auto-baud and the \sig{cmd\_error} event; a UART loopback from channel B's data pad into channel A; an SPI loopback in which channel A generates SCK and MOSI on its pads and channel B samples them back, gated by channel A's chip select; an I\textsuperscript{2}C loopback in which channel A is the controller and channel B the target at 0x42 on the same open-drain wire; sending ``A0000'' over UART with the host library; and a CRC-8 loopback, channel B appending the CRC and channel A checking it, with the right residue (result \texttt{03}) and a wrong one (\texttt{02}). It passes on the RTL and is run on the gate-level netlist by the \sig{gds} workflow.
 
 \paragraph{Bugs found by these tests and fixed.}
 \begin{itemize}
@@ -376,10 +382,13 @@ Test & What it checks & Result \\
 \item STOP and the end of packet waited for the return link; they now follow the frame mark.
 \item Outputs drove low after reset; they are now off until \sig{OUT} is given.
 \item A write frame finishes as soon as its last bits are queued, before they leave the pin, so a read-back rule had no frame left to act on (found by the CAN-style test). Write frames now stay open until the line drains while such a rule is set.
+\item The CAN start-of-frame bit was dropped as a stuff bit when it followed five or more idle recessive bits; unstuffing now counts only inside a frame (found by the CAN CRC test).
+\item A transmit with the chain's own data pin not read back raised a stuff error and aborted the frame; stuff errors are now ignored while the chain itself is driving the line.
+\item The reply was queued in the frame buffer behind received data and reached the line about 10 bits late on CAN; the tail now hands its wire entries straight to the codec.
 \item Timing: the first branch design fed the new mode straight into MAIN in the same clock, adding about 5\,ns to the worst path. The decision is now registered and the chain pauses for one clock.
 \end{itemize}
 
-\paragraph{Formal proofs.} Four modules are proven with SymbiYosys for every input sequence and with no depth limit (ABC \sig{pdr}); each harness in \sig{formal/} wraps the unchanged RTL with a small reference model. The host FIFO and the frame buffer: occupancy, \sig{full}, \sig{almost\_full} and \sig{empty} exact, data out unchanged and in order, rollback discarding exactly the uncommitted entries. The UART transmitter: start, eight data bits LSB first and stop, each held for exactly the programmed number of clocks, for every ratio from 1 to 15. The branch unit: the two rules behave as the ISA describes, including priority, once per frame, and the timing of \sig{stall}, \sig{hit} and \sig{branch\_abort}. Each proof has cover checks showing its cases are reachable, and fails with a counterexample when a bug is planted. The method is explained in the separate \emph{Formal Verification} guide.
+\paragraph{Formal proofs.} Five modules are proven with SymbiYosys for every input sequence and with no depth limit (ABC \sig{pdr}); each harness in \sig{formal/} wraps the unchanged RTL with a small reference model. The host FIFO and the frame buffer: occupancy, \sig{full}, \sig{almost\_full} and \sig{empty} exact, data out unchanged and in order, rollback discarding exactly the uncommitted entries. The UART transmitter: start, eight data bits LSB first and stop, each held for exactly the programmed number of clocks, for every ratio from 1 to 15. The branch unit: the two rules behave as the ISA describes, including priority, once per frame, the timing of \sig{stall}, \sig{hit} and \sig{branch\_abort}, and the CRC-result source. The CRC unit: the 8-bit-per-clock update equals a bit-by-bit reference CRC of the configured width kept right aligned, for every width, polynomial and chunk length; \sig{good} and \sig{crc\_out} follow from it; and feeding the register its own value top bit first always leaves zero, which is why an appended (not inverted) CRC checks with residue 0. Each proof has cover checks showing its cases are reachable, and fails with a counterexample when a bug is planted. The method is explained in the separate \emph{Formal Verification} guide.
 
 \paragraph{Lint.} Verilator reports no errors; the remaining warnings are intentional width extensions. There are no combinational loops (Yosys \sig{check -assert}).
 
@@ -475,9 +484,9 @@ The \sig{PIN} fields count the \sig{uio} pads. Every pad is read back through \s
 \begin{enumerate}
 \item \textbf{Return link bandwidth.} Two bytes per host entry. At 4 clocks per bit the link keeps up with USB low speed and the clocked standards. Full-size 10BASE-T frames (64 bytes and more) arrive faster; they are received but overflow the 16-entry buffer and are reported with the overflow flag.
 \item \textbf{Feeding fixed-timing lines.} \sig{DATA} streams during a frame, so packet length is no longer limited by the 8-entry host FIFO, but each entry costs 140 clocks on the instruction link at 7 clocks per bit. UART transmit keeps up to about 1.2\,Mbaud; faster fixed-timing lines must be preloaded (8 entries) or end with an underrun.
-\item \textbf{Head-of-line blocking.} A host entry waiting for the return link holds up the wire entries behind it. I\textsuperscript{2}C just stretches SCL; a timed transmit would pause.
+\item \textbf{Head-of-line blocking.} A host entry waiting for the return link holds up the wire entries behind it. I\textsuperscript{2}C just stretches SCL; a timed transmit would pause. The appended CRC and the reply are exempt.
 \item \textbf{Manchester limits.} Receive needs at least 5 clocks per bit (50\,MHz for 10BASE-T); transmit needs an even divider (40 or 60\,MHz), and 60\,MHz meets timing at the typical and fast corners but not the slow one.
-\item \textbf{Not supported yet.} CRC generation on chip; clock stretching as an I\textsuperscript{2}C target; CAN bit stuffing is in the codec but untested; a \emph{loop} action for \sig{BRANCH} (repeat a block without the host).
+\item \textbf{Not supported yet.} Clock stretching as an I\textsuperscript{2}C target; a \emph{loop} action for \sig{BRANCH} (repeat a block without the host); a CRC over Manchester lines with a reply gap (the gap needs a non-Manchester timed line).
 \item \textbf{I\textsuperscript{2}C target speed.} Tested up to 1\,MHz SCL. Faster, the ACK after a repeated START can be late, because the previous frame's status entry must first reach the return link (head-of-line blocking).
 \item \textbf{Reset.} \sig{CLEAR} resets a channel through its asynchronous reset (\sig{rst\_n \&\& !clear}), driven from a control-unit flip-flop.
 \end{enumerate}
@@ -492,7 +501,7 @@ Folder or file & Content \\
 \sig{info.yaml} & Tiny Tapeout project file: title, tile count, source list, pin names \\
 \sig{src/top/} & \sig{tt\_um\_vertrex\_star\_proem.sv} (Tiny Tapeout top level and pin map), \sig{protocol\_emulator.sv} (chip core) and \sig{protocol\_emulator\_inst.sv} (instantiation template) \\
 \sig{src/core/} & \sig{emulator\_channel}, \sig{control\_unit}, \sig{line\_codec}, \sig{entry\_dispatch}, \sig{return\_path} \\
-\sig{src/core/frame\_chain/} & \sig{frame\_chain} and its blocks: \sig{first\_counter}, \sig{header\_counter}, \sig{start\_router}, \sig{branch\_unit}, \sig{main\_counter}, \sig{end\_counter}, \sig{watchdog} \\
+\sig{src/core/frame\_chain/} & \sig{frame\_chain} and its blocks: \sig{first\_counter}, \sig{header\_counter}, \sig{start\_router}, \sig{branch\_unit}, \sig{crc\_unit}, \sig{main\_counter}, \sig{end\_counter}, \sig{watchdog} \\
 \sig{src/primitives/} & Reusable building blocks: \sig{uart\_rx}, \sig{uart\_tx}, \sig{host\_fifo}, \sig{frame\_buffer} \\
 \sig{src/files.f} & File list in compile order, used by the scripts \\
 \sig{src/config.json} & LibreLane settings for the Tiny Tapeout GDS flow \\

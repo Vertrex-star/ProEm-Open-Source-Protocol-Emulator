@@ -110,6 +110,7 @@ logic stuffOn;
 logic dropBit;
 logic goodBit;
 logic stuffBad;
+logic txBegin;
 logic runMatch;
 logic [3:0] nextRun;
 logic rxBit;
@@ -124,7 +125,8 @@ typedef enum logic [2:0] {
 	T_START,
 	T_REPEAT,
 	T_STOP,
-	T_EOP
+	T_EOP,
+	T_WAIT
 } txState;
 
 txState state;
@@ -177,6 +179,9 @@ logic internal_tx_done;
 logic checkPoint;
 logic startWait;
 logic idleHold;
+logic [6:0] waitBits;
+logic waitAligned;
+logic idleLevel;
 
 assign code = line_config[15:13];
 assign inv = line_config[12];
@@ -230,6 +235,7 @@ assign goodBit = dataValid && !dropBit;
 assign stuffBad = dropBit && (stuffAny ? (bitValue == runValue) : bitValue);
 assign runMatch = stuffAny ? (bitValue == runValue) : bitValue;
 assign nextRun = runMatch ? runCount + 1'b1 : (stuffAny ? 4'd1 : 4'd0);
+assign txBegin = (state == T_IDLE) && nextValid && (nextLen != 4'd0) && !startWait && !packetActive && !(i2c && generating && !i2cBusy);
 
 always_ff @(posedge clk or negedge rst_n) begin
 	if (!rst_n) begin
@@ -252,7 +258,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 		prevClock <= clockIn;
 		rxTick <= goodBit;
 		rxStrobe <= strobe;
-		internal_code_error <= stuffBad;
+		internal_code_error <= stuffBad && !packetActive;
 		if (!timed) begin
 			rxCount <= '0;
 			locked <= 1'b0;
@@ -278,7 +284,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 		if (strobe && !manchester) begin
 			lastSample <= (se0 || se1) ? 1'b0 : lineA;
 		end
-		if (strobe && (se0 || se1)) begin
+		if (txBegin || (strobe && (se0 || se1))) begin
 			runCount <= '0;
 			runValue <= 1'b0;
 			skipNext <= 1'b0;
@@ -289,7 +295,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 		end else if (goodBit && stuffOn) begin
 			runCount <= nextRun;
 			runValue <= bitValue;
-			skipNext <= (nextRun == stuffLen);
+			skipNext <= (nextRun == stuffLen) && in_frame && (packetActive || line_free);
 		end
 		if (goodBit) begin
 			rxBit <= bitValue;
@@ -324,6 +330,7 @@ end
 assign dataBitEnded = !stuffing;
 assign startWait = i2cTarget && !shiftEdge;
 assign idleHold = packetActive && !(i2cTarget && openDrain);
+assign idleLevel = idleHold ? holdLevel : (openDrain ? 1'b1 : outIdle);
 assign runMatchTx = stuffAny ? (sendBit == txRunValue) : sendBit;
 assign txRunNew = runMatchTx ? txRun + 1'b1 : (stuffAny ? 4'd1 : 4'd0);
 assign willStuff = dataBitEnded && stuffOn && (txRunNew == stuffLen);
@@ -358,6 +365,8 @@ always_ff @(posedge clk or negedge rst_n) begin
 		endPending <= 1'b0;
 		genTick <= 1'b0;
 		internal_tx_done <= 1'b0;
+		waitBits <= '0;
+		waitAligned <= 1'b0;
 	end else begin
 		genTick <= 1'b0;
 		internal_tx_done <= 1'b0;
@@ -391,7 +400,11 @@ always_ff @(posedge clk or negedge rst_n) begin
 					step <= '0;
 					phaseB <= 1'b0;
 					if (nextValid && nextLen == 4'd0) begin
-						if (i2c && generating && i2cBusy) begin
+						if (nextData[7] && timed && !manchester) begin
+							waitBits <= nextData[6:0];
+							waitAligned <= 1'b0;
+							state <= T_WAIT;
+						end else if (i2c && generating && i2cBusy) begin
 							state <= T_REPEAT;
 						end else begin
 							nextValid <= 1'b0;
@@ -579,6 +592,28 @@ always_ff @(posedge clk or negedge rst_n) begin
 					end
 				end
 
+				T_WAIT: begin
+					if (!waitAligned) begin
+						txCount <= '0;
+						if (rxCount >= div - 1'b1) begin
+							waitAligned <= 1'b1;
+							if (skipNext) begin
+								waitBits <= waitBits + 1'b1;
+							end
+						end
+					end else if (waitBits == 7'd0) begin
+						nextValid <= 1'b0;
+						internal_tx_done <= 1'b1;
+						waitAligned <= 1'b0;
+						state <= T_IDLE;
+					end else if (txCount == div - 1'b1) begin
+						txCount <= '0;
+						waitBits <= waitBits - 1'b1;
+					end else begin
+						txCount <= txCount + 1'b1;
+					end
+				end
+
 				default: begin
 					state <= T_IDLE;
 				end
@@ -603,8 +638,8 @@ always_comb begin
 	level = 1'b1;
 	clockLevel = clockIdle;
 	case (state)
-		T_IDLE: begin
-			level = idleHold ? holdLevel : (openDrain ? 1'b1 : outIdle);
+		T_IDLE, T_WAIT: begin
+			level = idleLevel;
 			clockLevel = i2c ? !i2cBusy : clockIdle;
 		end
 		T_BIT: begin
@@ -640,7 +675,7 @@ end
 
 assign se0Out = (state == T_EOP) && (step == 2'd0) && pairCode;
 assign dataPin = se0Out ? 1'b0 : (level ^ inv);
-assign sending = (state != T_IDLE) || packetActive;
+assign sending = ((state != T_IDLE) && (state != T_WAIT)) || packetActive;
 assign selectActive = in_frame || sending || nextValid || !line_free;
 
 assign tx_ready = !nextValid && !endPending && !tx_cancel;

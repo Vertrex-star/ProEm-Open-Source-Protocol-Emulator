@@ -16,12 +16,13 @@ Built for the [Jane Street protocol emulator ASIC competition](https://blog.jane
 | --- | --- |
 | Channels | 2 independent channels, A and B, running at the same time |
 | Host link | UART in with auto-baud, UART out at a rate set by `LINK` (down to 4 clocks per bit) |
-| Verified at pin level | UART, SPI (controller and target), I2C controller and target, PS/2, 10BASE-T receive, Manchester transmit, USB low speed receive and transmit, SWD-style acknowledge handling, CAN-style arbitration |
+| Verified at pin level | UART, SPI (controller and target), I2C controller and target, PS/2, 10BASE-T receive, Manchester transmit, USB low speed receive and transmit with CRC-5/CRC-16 and handshake, SWD-style acknowledge handling, CAN with bit stuffing, arbitration, CRC-15 and acknowledge |
 | Reacting on chip | `BRANCH` rules change a frame's direction, or abort it, from a field just received or from the line not reading back what the chip drove |
+| CRC and reply on chip | Any CRC of 1 to 16 bits, checked on receive or appended on transmit; a fixed reply (USB ACK, CAN ACK slot) sent a set number of bits after a good or bad frame |
 | Long packets | `DATA` streams while a frame runs; fixed-timing lines report an underrun if the data runs out |
-| Logic | 15,513 cells after synthesis, 19,737 after place and route (35 % of the 6 × 4 core area) |
+| Logic | 15,513 cells after synthesis, 19,737 after place and route (35 % of the 6 × 4 core area), before the CRC unit; to be re-hardened |
 | Timing | Closed after routing at all three corners on CMOS5L: 17.4 ns worst path at 1.08 V, 125 °C (20 ns budget) |
-| Instruction set | ISA v0.5, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
+| Instruction set | ISA v0.6, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
 
 ## How it works
 
@@ -30,7 +31,8 @@ Built for the [Jane Street protocol emulator ASIC competition](https://blog.jane
   per frame and link events back on a second UART.
 * **Input pipeline.** Every input pin passes through two synchroniser flops and one register.
 * **Two channels.** Each has a host FIFO for write data, a *frame chain* (START, up to six headers,
-  MAIN, END, watchdog, frame buffer, and a *branch unit* with two rules), an entry dispatcher, and a
+  MAIN, END, watchdog, frame buffer, a *branch unit* with two rules, and a *CRC unit* with a
+  reply pattern), an entry dispatcher, and a
   *line codec*:
   * tick source: SYNC (clock pin edge), ASYNC / RECOVER (bit timer that re-centres on edges),
     GENERATE (drives SCK / SCL, with clock stretching);
@@ -77,7 +79,8 @@ src/
                     protocol_emulator.sv         chip core
                     protocol_emulator_inst.sv    instantiation template
   core/             emulator_channel, control_unit, line_codec, entry_dispatch, return_path
-    frame_chain/    frame_chain and its blocks (START, headers, router, MAIN, END, watchdog)
+    frame_chain/    frame_chain and its blocks (START, headers, router, MAIN, END, watchdog,
+                    branch_unit, crc_unit)
   primitives/       uart_rx, uart_tx, host_fifo, frame_buffer
   files.f           file list in compile order
   config.json       LibreLane settings used by the Tiny Tapeout GDS flow
@@ -107,6 +110,7 @@ tt_um_vertrex_star_proem                   src/top
     │   ├── frame_chain                    src/core/frame_chain
     │   │   ├── first_counter, header_counter (x6), start_router
     │   │   ├── main_counter, end_counter, watchdog
+    │   │   ├── branch_unit, crc_unit
     │   │   └── frame_buffer               src/primitives
     │   └── entry_dispatch                 src/core
     └── return_path                        src/core
@@ -210,13 +214,15 @@ Every test resets the chip, sends `0x55` for auto-baud, programs it with instruc
 | `t_branch` | SWD-style acknowledge (OK continues, WAIT and FAULT abort); CAN-style arbitration won and lost |
 | `t_stream` | underrun abort; 12-byte UART and 20-byte SPI frames fed while running |
 | `t_random_branch` | 600 random branch programs: capture-any header, random rules, actions and run modes |
+| `t_crc` | USB CRC-16 receive with ACK reply, CRC-5 tokens, USB transmit with CRC appended; CAN with stuffing, CRC-15 and ACK slot from a node model and chip to chip; 60 random CRCs looped chip to chip |
 
 ## Formal proofs
 
-Four modules are proven with [SymbiYosys](https://github.com/YosysHQ/sby), for every possible
+Five modules are proven with [SymbiYosys](https://github.com/YosysHQ/sby), for every possible
 input sequence and with no depth limit: the host FIFO, the frame buffer (including commit and
-rollback), the UART transmitter (for every clocks-per-bit value) and the branch unit (against a
-model of the BRANCH rules). Each proof takes about a second. With the
+rollback), the UART transmitter (for every clocks-per-bit value), the branch unit (against a
+model of the BRANCH rules) and the CRC unit (against a bit-by-bit CRC of every width). Most take
+a few seconds; the CRC proof takes about four minutes. With the
 [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build) installed:
 
 ```sh
@@ -239,7 +245,8 @@ All tests pass, and the design places, routes and meets timing on 6 × 4 Tiny Ta
 the CMOS5L template.
 Known limits are listed in the design reference; the main ones are the return link bandwidth
 (full-size Ethernet frames overflow and are reported), the instruction link rate when feeding
-fast fixed-timing lines, and no CRC generation on chip (the host computes CRCs and sends them as `DATA`). Still to do:
+fast fixed-timing lines. The CRC unit and reply are new since the last hardening, so the layout
+figures above are from before them. Still to do:
 formal proofs for the UART receiver, frame chain counters and line codec, and a Quartus compile
 (so far checked with Yosys, Verilator and Icarus).
 

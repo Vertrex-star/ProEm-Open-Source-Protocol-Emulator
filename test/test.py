@@ -157,10 +157,10 @@ async def test_autobaud_and_errors(dut):
     link = await power_on(dut)
     assert (int(dut.uo_out.value) >> 1) & 1 == 1, "BAUD_LOCKED did not go high after 0x55"
     assert int(dut.uio_oe.value) == 0, "outputs must be off after reset"
-    await link.send([0xF4, 0, 0, 0])
+    await link.send([0xF7, 0, 0, 0])
     await link.quiet()
     dut._log.info(f"link events {link.events}")
-    assert link.events and (link.events[0] & 2), f"an invalid BRANCH rule should give cmd_error, got {link.events}"
+    assert link.events and (link.events[0] & 2), f"an invalid BRANCH index (7) should give cmd_error, got {link.events}"
 
 
 @cocotb.test()
@@ -261,3 +261,29 @@ async def test_send_uart_A0000(dut):
     dut._log.info(f"receiver on uio[0] heard {bytes(heard)}, status {link.status[0]}")
     assert bytes(heard) == message
     assert link.status[0] == [1] * len(message)
+
+
+@cocotb.test()
+async def test_crc_append_and_check(dut):
+    link = await power_on(dut)
+    dut.loop_uart.value = 1
+    r = 16
+    payload = [0x31, 0xC5]
+    bits = [(b >> k) & 1 for b in payload for k in range(8)]
+    crc = ph.crc_wire(bits, 8, 0x07)
+    crc_byte = sum(((crc >> (7 - k)) & 1) << k for k in range(8))
+    for residue, good in ((0x00, 1), (0x5A, 0)):
+        link.got = [[], []]
+        link.status = [[], []]
+        link.channel = 0
+        await link.send(link.line(0, 0) + link.clock(ASYNC, r) + link.start(0x00, 1, 0, 0, 0) + link.main(24, 0)
+                        + ph.crc_a(0, 8, 0x07) + ph.crc_b(0, check=1, residue=residue) + link.run(0))
+        link.channel = 1
+        await link.send(link.line(0, 0) + link.clock(ASYNC, r) + link.out(3, 1) + link.start(0x00, 1, 0, 1) + link.main(16, 1)
+                        + ph.crc_a(1, 8, 0x07) + ph.crc_b(1, append=1) + link.data(8, payload[0]) + link.data(8, payload[1]) + link.run(2))
+        await ClockCycles(dut.clk, 30 * r + 200)
+        await link.quiet()
+        dut._log.info(f"A read {link.got[0]}, status A {link.status[0]}, B {link.status[1]}")
+        assert link.got[0] == [(8, payload[0]), (8, payload[1]), (8, crc_byte), (14, 2 | good)], f"channel A read {link.got[0]}"
+        assert link.status[0] == [1], f"channel A status {link.status[0]}"
+        assert link.status[1] == [1], f"channel B status {link.status[1]}"

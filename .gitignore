@@ -24,3 +24,4 @@ formal/*_prove/
 formal/*_cover/
 formal/*.log
 __pycache__/
+formal/*/

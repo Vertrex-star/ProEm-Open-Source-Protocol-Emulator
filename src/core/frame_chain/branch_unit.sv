@@ -23,6 +23,8 @@ module branch_unit #(
 	input logic[blocks-1:0] block_success,
 	input logic[blocks*8-1:0] block_values,
 	input logic mismatch,
+	input logic crc_event,
+	input logic crc_good,
 	input logic in_frame,
 	input logic frame_reset,
 
@@ -55,6 +57,8 @@ logic[1:0] fire;
 logic[1:0] matched;
 logic[1:0] tookHit;
 logic[1:0] chosen;
+logic[1:0] lineEvent;
+logic[1:0] lineHit;
 
 logic internal_hit;
 logic internal_abort;
@@ -70,10 +74,17 @@ always_comb begin
 		end
 		matched[r] = ((watched[r] ^ ruleValue[r]) & ruleMask[r]) == 8'd0;
 		fireBlock[r] = ruleOn[r] && !ruleSrc[r] && !fired[r] && in_frame && ({29'd0, ruleBlock[r]} < blocks) && block_success[ruleBlock[r]];
-		fireLine[r] = ruleOn[r] && ruleSrc[r] && !fired[r] && in_frame && mismatch;
+	end
+end
+
+always_comb begin
+	for (int r = 0; r < 2; r++) begin
+		lineEvent[r] = (ruleBlock[r] == 3'd0) ? mismatch : ((ruleBlock[r] == 3'd1) && crc_event);
+		lineHit[r] = (ruleBlock[r] == 3'd0) || crc_good;
+		fireLine[r] = ruleOn[r] && ruleSrc[r] && !fired[r] && in_frame && lineEvent[r];
 		fire[r] = fireBlock[r] || fireLine[r];
-		tookHit[r] = fireLine[r] || (fireBlock[r] && matched[r]);
-		action[r] = (fireLine[r] || matched[r]) ? ruleHit[r] : ruleMiss[r];
+		tookHit[r] = (fireLine[r] && lineHit[r]) || (fireBlock[r] && matched[r]);
+		action[r] = (fireLine[r] ? lineHit[r] : matched[r]) ? ruleHit[r] : ruleMiss[r];
 	end
 end
 
@@ -129,6 +140,6 @@ assign set_mode = (chosen == ACT_READ) || (chosen == ACT_WRITE);
 assign new_mode = (chosen == ACT_READ) ? 2'd1 : 2'd2;
 assign hit = internal_hit;
 assign branch_abort = internal_abort;
-assign line_watch = |(ruleOn & ruleSrc);
+assign line_watch = (ruleOn[0] && ruleSrc[0] && ruleBlock[0] == 3'd0) || (ruleOn[1] && ruleSrc[1] && ruleBlock[1] == 3'd0);
 
 endmodule

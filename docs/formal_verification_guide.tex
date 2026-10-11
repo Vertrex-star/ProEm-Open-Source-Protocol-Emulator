@@ -48,7 +48,7 @@
 \maketitle
 
 \begin{abstract}
-This guide explains formal verification for someone who knows simulation but has not used a model checker. It covers the ideas (assertions, assumptions, covers, bounded and unbounded proofs), the open-source tools and how to install them on Windows, how to write a proof harness, and how to read the results. Every example comes from the \file{formal/} folder of the ProEm repository, where four modules (the host FIFO, the frame buffer, the UART transmitter and the branch unit) are proven with no depth limit. Each proof takes about a second.
+This guide explains formal verification for someone who knows simulation but has not used a model checker. It covers the ideas (assertions, assumptions, covers, bounded and unbounded proofs), the open-source tools and how to install them on Windows, how to write a proof harness, and how to read the results. Every example comes from the \file{formal/} folder of the ProEm repository, where five modules (the host FIFO, the frame buffer, the UART transmitter, the branch unit and the CRC unit) are proven with no depth limit. Most proofs take a few seconds; the CRC unit takes about four minutes.
 \end{abstract}
 
 \tableofcontents
@@ -275,6 +275,7 @@ sby -f host_fifo.sby prove          # one task only
 
 \begin{lstlisting}
 PASS  branch_unit (prove and cover)
+PASS  crc_unit (prove and cover)
 PASS  frame_buffer (prove and cover)
 PASS  host_fifo (prove and cover)
 PASS  uart_tx (prove and cover)
@@ -302,6 +303,7 @@ Planted bug & Result \\
 \midrule
 Frame buffer: rollback restores the write pointer to \texttt{cm\_ptr + 1} instead of \texttt{cm\_ptr} & FAIL at once, with a trace \\
 Branch unit: rule 1 given priority over rule 0 & FAIL at once, with a trace \\
+CRC unit: the chunk loop takes one bit more than \texttt{feed\_len} & FAIL at once, with a trace \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -309,9 +311,9 @@ Branch unit: rule 1 given priority over rule 0 & FAIL at once, with a trace \\
 Covers do the same job in the other direction: each cover must be \emph{reached}, or the property it guards may be vacuous.
 
 %=====================================================================
-\section{The four ProEm proofs}
+\section{The five ProEm proofs}
 
-All are unbounded (PDR) and each takes about a second.
+All are unbounded (PDR). The first four take about a second each; the CRC unit takes about four minutes.
 
 \subsection{Host FIFO (\file{host\_fifo\_formal.sv})}
 Occupancy never exceeds the depth; \texttt{full} and \texttt{empty} match the count exactly; \texttt{flush} empties it; any value written comes out unchanged and in order. Covers: the FIFO fills; a tracked value travels the whole depth.
@@ -329,7 +331,17 @@ The model keeps two counts: entries written and not yet read (\texttt{total}), a
 With \texttt{ratio} free (\texttt{anyconst}, 1 to 15), the model counts bits and cycles, and the proof shows every frame is a start bit, eight data bits LSB first and a stop bit, each held for exactly \texttt{ratio} clocks; the line is high whenever idle; and \texttt{tx\_ready} is high exactly when idle. Cover: a full frame of 0xA5 at 3 clocks per bit.
 
 \subsection{Branch unit (\file{branch\_unit\_formal.sv})}
-The harness models the two BRANCH rules from the ISA, loaded through the same configuration writes: compare the chosen block's byte under the mask with the value; take the hit or miss action; for a read-back rule, fire on a mismatch; rule 0 wins over rule 1; each rule acts at most once per frame, until the next frame starts or the rule is rewritten. It proves that \texttt{set\_mode} and \texttt{new\_mode} give the chosen action in the same cycle and only inside a frame; that \texttt{hit} and \texttt{branch\_abort} follow one cycle later (they are registered) and are suppressed by a frame reset; that \texttt{stall} is high for exactly the decision cycle and the abort cycle; and that \texttt{line\_watch} is set exactly when a read-back rule is enabled. Covers: a switch to read; an abort after a hit; both rules firing together.
+The harness models the two BRANCH rules from the ISA, loaded through the same configuration writes: compare the chosen block's byte under the mask with the value; take the hit or miss action; for a read-back rule, fire on a mismatch; rule 0 wins over rule 1; each rule acts at most once per frame, until the next frame starts or the rule is rewritten. It proves that \texttt{set\_mode} and \texttt{new\_mode} give the chosen action in the same cycle and only inside a frame; that \texttt{hit} and \texttt{branch\_abort} follow one cycle later (they are registered) and are suppressed by a frame reset; that \texttt{stall} is high for exactly the decision cycle and the abort cycle; and that \texttt{line\_watch} is set exactly when a read-back rule is enabled. A rule with \texttt{SRC} = 1 and \texttt{BLOCK} = 1 fires on the CRC result event and takes its hit action exactly when the CRC was good. Covers: a switch to read; an abort after a hit; both rules firing together; a CRC rule hitting and missing.
+
+\subsection{CRC unit (\file{crc\_unit\_formal.sv})}
+The chip keeps the CRC register top aligned in 16 bits and updates it with up to 8 bits per clock. The harness keeps a second, textbook model: a register of exactly the configured width, right aligned, updated one bit at a time with the polynomial masked to that width. Width, polynomial, initial value, residue, inversion and every input are free, so the proof covers every CRC of 1 to 16 bits. It proves:
+\begin{itemize}
+\item the chip's register is always the model shifted to the top (\texttt{crc\_out}, inverted when asked);
+\item \texttt{good} is exactly ``model equals residue'';
+\item feeding the register its own value, top bit first, always leaves zero. This is the reason a CRC appended without inversion checks with residue 0 at the receiver;
+\item the configuration outputs (\texttt{enabled}, \texttt{check}, \texttt{append}, \texttt{width}, \texttt{cover\_from}) match the last configuration write.
+\end{itemize}
+The assertions are skipped for the one cycle after a configuration write, when the register is being reloaded. Covers: a 16-bit CRC good after three chunks; a 5-bit CRC with the USB residue \texttt{0x0C}; an inverted output of all ones.
 
 %=====================================================================
 \section{Pitfalls}

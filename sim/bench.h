@@ -62,6 +62,14 @@ B I_link(unsigned div){ return {op(0xE),(div>>8)&0xFF,div&0xFF}; }
 B I_data(unsigned len,unsigned val){ return {op(0xC,len-1),val&0xFF}; }
 B I_branch(int rule,int hit,int miss,int src,int block,unsigned mask,unsigned value){ return {op(0xF,rule),(unsigned)((hit<<6)|(miss<<4)|(src<<3)|(block&7)),mask&0xFF,value&0xFF}; }
 enum { KEEP=0, GO_READ=1, GO_WRITE=2, ABORT=3 };
+B I_crc_a(int width,int from,int init_ones,unsigned poly){ return {op(0xF,2),(unsigned)((((width-1)&15)<<4)|((from&7)<<1)|(init_ones&1)),(poly>>8)&0xFF,poly&0xFF}; }
+B I_crc_b(int on,int check,int append,int inv,unsigned residue){ return {op(0xF,3),(unsigned)((on<<7)|(check<<6)|(append<<5)|(inv<<4)),(residue>>8)&0xFF,residue&0xFF}; }
+B I_reply(int when,int len,int gap,unsigned pattern){ return {op(0xF,4),(unsigned)(((when&3)<<6)|(((len-1)&15)<<2)|(gap&3)),(pattern>>8)&0xFF,pattern&0xFF}; }
+enum { REPLY_OFF=0, REPLY_GOOD=1, REPLY_BAD=2, REPLY_ALWAYS=3 };
+unsigned crc_wire(const std::vector<int>&bits,int width,unsigned poly,int init_ones){ int sh=16-width; unsigned pa=(poly<<sh)&0xFFFF; unsigned c=init_ones?((0xFFFFu<<sh)&0xFFFF):0;
+  for(int b:bits){ int fb=((c>>15)&1)^b; c=((c<<1)&0xFFFF)^(fb?pa:0); } return c; }
+std::vector<int> crc_tx(unsigned c,int width,int inv){ if(inv) c=~c&0xFFFF; std::vector<int> o; for(int i=0;i<width;i++) o.push_back((c>>(15-i))&1); return o; }
+std::vector<int> byte_bits(const std::vector<unsigned>&bytes,int msb){ std::vector<int> o; for(unsigned b:bytes) for(int k=0;k<8;k++) o.push_back(msb?((b>>(7-k))&1):((b>>k)&1)); return o; }
 B cat(std::initializer_list<B> parts){ B o; for(auto&p:parts) o.insert(o.end(),p.begin(),p.end()); return o; }
 enum { SYNC=0, ASYNC=1, GENERATE=2, RECOVER=3 };
 void power_on(){ t.p_rx__serial.set<bool>(true); t.p_pin__in.set<unsigned>(pin_in); t.p_rst__n.set<bool>(0); t.step(); t.p_rst__n.set<bool>(1); t.step(); idle(20); send_byte(0x55); settle(); }

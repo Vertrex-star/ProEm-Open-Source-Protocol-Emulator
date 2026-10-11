@@ -32,6 +32,7 @@ The pins are logic level. USB, CAN, RS-485 and Ethernet need the usual transceiv
 | First byte | Second byte | Meaning |
 | --- | --- | --- |
 | `0x80 + L` (A) or `0xA0 + L` (B), L = 0 to 8 | value | Data received: L bits |
+| `0x8E` (A) or `0xAE` (B) | result | CRC result of a read frame, before its status: bit 0 good, bit 1 checked |
 | `0x8F` (A) or `0xAF` (B) | flags | End of a frame: bit 0 complete, 1 abort, 2 timeout, 3 line error, 4 overflow, 5 underrun, 6 branch matched, 7 branch abort |
 | `0xC0` | flags | Link events: bit 0 receive error, 1 bad instruction, 2 DATA dropped on A, 3 on B |
 
@@ -78,6 +79,27 @@ receiver model.
 
 The same pattern covers every standard: fixed parts of a frame (addresses, commands, sync
 patterns) go in START and the headers, the payload goes through `DATA`, and the ending comes from
-`OUT` (I2C STOP, USB end of packet, chip select). CRCs are computed by the host and sent as `DATA`.
+`OUT` (I2C STOP, USB end of packet, chip select).
 The ISA document lists complete programs for SPI, I2C (controller and target), USB low speed,
 10BASE-T receive, PS/2, SWD-style and CAN-style arbitration.
+
+## CRC and reply
+
+The chip can check or append a CRC itself and answer a good frame with a short reply. Three
+builders set this up; `crc_wire()` computes the same CRC in Python, bit by bit in wire order, for
+checking results or building test data.
+
+```python
+# USB low speed, channel A: check the DATA packet's CRC-16 and send an ACK handshake
+prog  = ph.crc_a(0, 16, 0x8005, cover_from=ph.CRC_FROM_MAIN, init_ones=1)
+prog += ph.crc_b(0, check=1, residue=0x800D)
+prog += ph.reply(0, ph.REPLY_GOOD, 16, 0xD280, gap=3)   # SYNC 0x80, PID 0xD2, 3 bit times later
+
+# CAN, channel B: append the CRC-15 to every frame it sends
+prog += ph.crc_a(1, 15, 0x4599, cover_from=ph.CRC_FROM_START)
+prog += ph.crc_b(1, append=1)
+```
+
+A read frame with the check on returns `('crc', channel, good, checked)` from `decode_return()`
+just before its status. `branch(ch, rule, hit, miss, src=1, block=1)` makes a rule act on the
+same result.

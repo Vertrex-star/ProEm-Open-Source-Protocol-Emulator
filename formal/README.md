@@ -9,7 +9,8 @@ small reference model and assertions, then runs [SymbiYosys](https://github.com/
 | `host_fifo` | Occupancy never exceeds the depth; `full` and `empty` are exact; flush empties it; any value written comes out unchanged and in order | `abc pdr` (unbounded) |
 | `frame_buffer` | Same as above, plus commit and rollback: rollback discards exactly the uncommitted entries, committed entries survive, and reads only ever see committed entries | `abc pdr` (unbounded) |
 | `uart_tx` | Every frame is a start bit, 8 data bits LSB first, and a stop bit, each held for exactly `clk_ratio` clocks, for every ratio from 1 to 15; the line idles high and `tx_ready` is exact | `abc pdr` (unbounded) |
-| `branch_unit` | The two BRANCH rules behave as the ISA describes: compare with mask and value, hit and miss actions, read-back mismatch source, rule 0 before rule 1, each rule acts at most once per frame, `stall`, `hit`, `branch_abort` and `line_watch` timing | `abc pdr` (unbounded) |
+| `branch_unit` | The two BRANCH rules behave as the ISA describes: compare with mask and value, hit and miss actions, read-back mismatch and CRC-result sources, rule 0 before rule 1, each rule acts at most once per frame, `stall`, `hit`, `branch_abort` and `line_watch` timing | `abc pdr` (unbounded) |
+| `crc_unit` | The 8-bit-per-clock update equals a bit-by-bit CRC of the configured width (1 to 16, any polynomial, any chunk of 1 to 8 bits), kept right aligned; `good` is exactly "register equals residue"; `crc_out` is the register top aligned, inverted when asked; feeding the register its own value top bit first always leaves zero (so an appended CRC checks with residue 0); the configuration outputs match the last write | `abc pdr` (unbounded) |
 
 Every job also has a `cover` task that shows the interesting cases are reachable (the FIFO fills,
 a tracked value is read back, both rules fire together), so a proof cannot pass by accident.

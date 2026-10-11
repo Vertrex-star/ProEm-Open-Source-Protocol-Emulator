@@ -21,6 +21,8 @@ module branch_unit_formal (
 	input logic [6:0] block_success,
 	input logic [55:0] block_values,
 	input logic mismatch,
+	input logic crc_event,
+	input logic crc_good,
 	input logic in_frame,
 	input logic frame_reset
 );
@@ -50,6 +52,8 @@ branch_unit #(
 	.block_success(block_success),
 	.block_values(block_values),
 	.mismatch(mismatch),
+	.crc_event(crc_event),
+	.crc_good(crc_good),
 	.in_frame(in_frame),
 	.frame_reset(frame_reset),
 	.stall(stall),
@@ -67,6 +71,9 @@ logic [7:0] value [0:1];
 logic [1:0] used;
 logic [1:0] trigger;
 logic [1:0] byBlock;
+logic [1:0] byLine;
+logic [1:0] lineEvent;
+logic [1:0] lineHit;
 logic [1:0] tookHit;
 logic [1:0] act [0:1];
 logic [1:0] choice;
@@ -90,8 +97,11 @@ always_comb begin
 	for (int r = 0; r < 2; r++) begin
 		seen = padded[rule[r][2:0] * 8 +: 8];
 		byBlock[r] = (rule[r] != 8'd0) && !rule[r][3] && !used[r] && in_frame && (rule[r][2:0] != 3'd7) && successPadded[rule[r][2:0]];
-		trigger[r] = byBlock[r] || ((rule[r] != 8'd0) && rule[r][3] && !used[r] && in_frame && mismatch);
-		tookHit[r] = trigger[r] && (rule[r][3] || (((seen ^ value[r]) & mask[r]) == 8'd0));
+		lineEvent[r] = (rule[r][2:0] == 3'd0) ? mismatch : ((rule[r][2:0] == 3'd1) && crc_event);
+		lineHit[r] = (rule[r][2:0] == 3'd0) || crc_good;
+		byLine[r] = (rule[r] != 8'd0) && rule[r][3] && !used[r] && in_frame && lineEvent[r];
+		trigger[r] = byBlock[r] || byLine[r];
+		tookHit[r] = (byLine[r] && lineHit[r]) || (byBlock[r] && (((seen ^ value[r]) & mask[r]) == 8'd0));
 		act[r] = tookHit[r] ? rule[r][7:6] : rule[r][5:4];
 	end
 	if (trigger[0] && act[0] != ACT_KEEP) begin
@@ -141,7 +151,7 @@ always_comb begin
 		assert (stall == ((|byBlock) || expectAbort));
 		assert (hit == expectHit);
 		assert (branch_abort == expectAbort);
-		assert (line_watch == (((rule[0] != 8'd0) && rule[0][3]) || ((rule[1] != 8'd0) && rule[1][3])));
+		assert (line_watch == (((rule[0] != 8'd0) && rule[0][3] && (rule[0][2:0] == 3'd0)) || ((rule[1] != 8'd0) && rule[1][3] && (rule[1][2:0] == 3'd0))));
 	end
 end
 
@@ -150,6 +160,8 @@ always_comb begin
 		cover (set_mode && new_mode == 2'd1);
 		cover (branch_abort && hit);
 		cover (trigger[0] && trigger[1]);
+		cover (byLine[0] && rule[0][2:0] == 3'd1 && tookHit[0]);
+		cover (byLine[1] && rule[1][2:0] == 3'd1 && !tookHit[1]);
 	end
 end
 

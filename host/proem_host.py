@@ -53,6 +53,37 @@ def data(ch, length, val):
     return [_op(0xC, ch, length - 1), val & 0xFF]
 
 
+REPLY_OFF, REPLY_GOOD, REPLY_BAD, REPLY_ALWAYS = 0, 1, 2, 3
+CRC_FROM_START, CRC_FROM_MAIN = 0, 7
+
+
+def branch(ch, rule, hit, miss, src, block, mask=0, value=0):
+    return [_op(0xF, ch, rule), (hit << 6) | (miss << 4) | (src << 3) | (block & 7), mask & 0xFF, value & 0xFF]
+
+
+def crc_a(ch, width, poly, cover_from=CRC_FROM_MAIN, init_ones=0):
+    return [_op(0xF, ch, 2), (((width - 1) & 15) << 4) | ((cover_from & 7) << 1) | (init_ones & 1), (poly >> 8) & 0xFF, poly & 0xFF]
+
+
+def crc_b(ch, on=1, check=0, append=0, invert=0, residue=0):
+    return [_op(0xF, ch, 3), (on << 7) | (check << 6) | (append << 5) | (invert << 4), (residue >> 8) & 0xFF, residue & 0xFF]
+
+
+def reply(ch, when, length, pattern, gap=0):
+    return [_op(0xF, ch, 4), ((when & 3) << 6) | (((length - 1) & 15) << 2) | (gap & 3), (pattern >> 8) & 0xFF, pattern & 0xFF]
+
+
+def crc_wire(bits, width, poly, init_ones=0):
+    shift = 16 - width
+    crc = (0xFFFF << shift) & 0xFFFF if init_ones else 0
+    for b in bits:
+        fb = ((crc >> 15) & 1) ^ b
+        crc = (crc << 1) & 0xFFFF
+        if fb:
+            crc ^= (poly << shift) & 0xFFFF
+    return crc >> shift
+
+
 def uart_divider(baud):
     return round(CLOCK_HZ / baud)
 
@@ -89,6 +120,8 @@ def decode_return(stream):
             length = head & 0x0F
             if length == 0x0F:
                 events.append(("status", ch, value))
+            elif length == 0x0E:
+                events.append(("crc", ch, value & 1, (value >> 1) & 1))
             else:
                 events.append(("data", ch, length, value))
     return events

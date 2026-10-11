@@ -147,7 +147,7 @@ end
 assign startMsb = chain ? msbB : msbA;
 assign startCycles = operands[19:16];
 assign startValue = (!startMsb && startCycles != 4'd0 && startCycles < 4'd8) ? (operands[7:0] << (4'd8 - startCycles)) : operands[7:0];
-assign chainWrite = (opcode == OP_START) || (opcode == OP_HDR && index != 3'd0 && index != 3'd7) || (opcode == OP_MAIN) || (opcode == OP_END) || (opcode == OP_WDOG) || (opcode == OP_ORDER) || (opcode == OP_BRANCH && index[2:1] == 2'd0);
+assign chainWrite = (opcode == OP_START) || (opcode == OP_HDR && index != 3'd0 && index != 3'd7) || (opcode == OP_MAIN) || (opcode == OP_END) || (opcode == OP_WDOG) || (opcode == OP_ORDER) || (opcode == OP_BRANCH && index <= 3'd4);
 
 always_ff @(posedge clk or negedge rst_n) begin
 	if (!rst_n) begin
@@ -344,11 +344,17 @@ always_ff @(posedge clk or negedge rst_n) begin
 						internal_link_div <= operands[15:0];
 					end
 					OP_BRANCH: begin
-						internal_sel <= {3'b100, index[0]};
+						case (index)
+							3'd0: internal_sel <= 4'd8;
+							3'd1: internal_sel <= 4'd9;
+							3'd2: internal_sel <= 4'd10;
+							3'd3: internal_sel <= 4'd11;
+							default: internal_sel <= 4'd7;
+						endcase
 						internal_main_cycles <= {8'd0, operands[23:16]};
 						internal_cycles <= operands[15:8];
 						internal_compare <= operands[7:0];
-						if (index[2:1] != 2'd0) begin
+						if (index > 3'd4) begin
 							internal_cmd_error <= 1'b1;
 						end
 					end

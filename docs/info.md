@@ -15,7 +15,8 @@ codec, so the same hardware speaks UART, SPI (controller and target), I2C (contr
 stretching, and target), PS/2, 10BASE-T receive (Manchester) and USB low speed (NRZI with bit
 stuffing). Two `BRANCH` rules per channel let a frame change direction or abort on a field it has
 just received, which gives I2C target mode, SWD-style acknowledge handling and CAN-style
-arbitration.
+arbitration. A CRC unit per channel checks or appends any CRC of 1 to 16 bits, and a reply pattern
+answers a good frame on its own (USB ACK handshake, CAN acknowledge slot).
 
 ![Architecture](architecture_datasheet.png)
 
@@ -35,10 +36,10 @@ byte `{OP[3:0], CH, N[2:0]}` followed by 0 to 4 operand bytes. The full instruct
 | 0xC | DATA | `VALUE` (length = N + 1) |
 | 0xD | OUT | `{DRIVE, IDLE, PAIR, EOP, I2C, CSH, -}` |
 | 0xE | LINK | return link clocks per bit (0 = same as the auto-baud rate) |
-| 0xF | BRANCH | `{HIT, MISS, SRC, BLOCK}`, `MASK`, `VALUE`; `N` = rule 0 or 1 |
+| 0xF | BRANCH | `N` = 0, 1: rule `{HIT, MISS, SRC, BLOCK}`, `MASK`, `VALUE`; `N` = 2: CRC `{WIDTH-1, FROM, INIT}`, `POLY[15:0]`; `N` = 3: `{ON, CHK, APP, INV, -}`, `RESIDUE[15:0]`; `N` = 4: reply `{WHEN, LEN-1, GAP}`, `PATTERN[15:0]` |
 
 Return messages are two bytes: `{1, 0, C, 0, LEN}` then the value for received data on channel C,
-`LEN = 15` for the end-of-frame status (bit 0 complete, 1 abort, 2 timeout, 3 line error,
+`LEN = 14` for a CRC result (bit 0 good, bit 1 checked), `LEN = 15` for the end-of-frame status (bit 0 complete, 1 abort, 2 timeout, 3 line error,
 4 overflow, 5 underrun, 6 branch matched, 7 branch abort), and `0xC0` for link events (bit 0 framing error, 1 bad instruction, 2 and 3 data
 dropped on A or B).
 

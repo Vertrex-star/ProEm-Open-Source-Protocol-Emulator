@@ -4,7 +4,7 @@
 // Module: frame_chain
 // Type: RTL, core (frame chain)
 // Hierarchy: tt_um_vertrex_star_proem > protocol_emulator > emulator_channel > frame_chain
-// Submodules: first_counter, header_counter (x6), start_router, branch_unit, main_counter, end_counter, watchdog, frame_buffer
+// Submodules: first_counter, header_counter (x6), start_router, branch_unit, main_counter, end_counter, watchdog, crc_unit, frame_buffer
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
 // Description:
@@ -48,6 +48,8 @@ module frame_chain #(
 	input logic cfg_error,
 	input logic tx_done,
 	input logic discard,
+	input logic tx_take,
+	input logic tail_ready,
 	input logic strict_tx,
 	input logic tx_mismatch,
 	input logic i2c_target,
@@ -70,7 +72,10 @@ module frame_chain #(
 	output logic listen,
 	output logic armed,
 	output logic in_frame,
-	output logic tx_cancel
+	output logic tx_cancel,
+	output logic tail_valid,
+	output logic[3:0] tail_len,
+	output logic[7:0] tail_data
 );
 
 logic[blocks-1:0] block_success;
@@ -103,6 +108,7 @@ logic[12:0] fifo_raw;
 logic[7:0] reversed;
 logic[7:0] flipped;
 logic[4:0] outstanding;
+logic[4:0] queued;
 logic[7:0] status_flags;
 
 logic input_bit;
@@ -158,13 +164,64 @@ logic i2c_abort;
 logic start_pending;
 logic start_prev;
 logic main_end;
-logic main_done;
 logic main_run;
 logic line_watch;
 logic finish_wait;
 logic main_waiting_end;
 logic cancel_now;
 logic internal_cancel;
+logic main_done_raw;
+logic main_done_eff;
+logic crc_on;
+logic crc_check;
+logic crc_append;
+logic crc_good;
+logic crc_restart;
+logic crc_feed;
+logic crc_event;
+logic[2:0] crc_from;
+logic[4:0] crc_width;
+logic[15:0] crc_out;
+logic[7:0] crc_bits;
+logic[3:0] crc_len;
+logic[7:0] covered;
+logic[7:0] start_wire;
+logic raw_covered;
+logic rx_bit_feed;
+logic start_feed;
+logic tx_feed;
+logic[1:0] reply_when;
+logic[3:0] reply_less;
+logic[1:0] reply_gap;
+logic[15:0] reply_pattern;
+logic reply_fire;
+logic[4:0] reply_len;
+logic[7:0] reply_first;
+logic[15:0] reply_upper;
+logic[15:0] reply_lower;
+logic[7:0] reply_second;
+logic[3:0] reply_first_len;
+logic[3:0] reply_second_len;
+logic[7:0] crc_first;
+logic[7:0] crc_second;
+logic[3:0] crc_first_len;
+logic[3:0] crc_second_len;
+logic[5:0] tail_need;
+logic[5:0] tail_remaining;
+logic[5:0] tail_step;
+logic tail_active;
+logic tail_start;
+logic tail_push;
+logic tail_take;
+logic tail_wire;
+logic tail_advance;
+logic[7:0] tail_flipped;
+logic[7:0] tail_reversed;
+logic tail_done;
+logic tail_bypass;
+logic tail_skip;
+logic reply_armed;
+logic[12:0] tail_entry;
 
 assign input_bit = pins[data_pin];
 assign end_a = raw_pins[end_pin];
@@ -199,7 +256,7 @@ assign main_enable = main_ready && (!main_sr || main_sr_sent) && !branch_stall;
 assign main_sr_need = main_ready && main_sr && !main_sr_sent;
 assign sr_accept = ((|sr_need) || main_sr_need) && !(|block_push) && !main_valid && !out_full && !abort && !halt;
 assign frame_event = complete || abort || write_end;
-assign status_accept = status_pending && !frame_event && !(|block_push) && !main_valid && !sr_accept && !out_full && !main_pending && !halt;
+assign status_accept = status_pending && !frame_event && !(|block_push) && !main_valid && !sr_accept && !out_full && !main_pending && !tail_active && !halt;
 
 always_comb begin
 	block_listening[0] = internal_armed && !block_writing[0] && !block_success[0];
@@ -210,8 +267,8 @@ end
 
 assign listen = line_free && ((|block_listening) || main_listening);
 assign wire_accept = fifo_wr && fifo_din[12] && !out_full && !abort && !halt;
-assign main_run = main_enable && !finish_wait;
-assign complete = (main_done && !(line_watch && main_writing)) || (finish_wait && line_free);
+assign main_run = main_enable && !finish_wait && !tail_active;
+assign complete = (main_done_eff && !(line_watch && main_writing)) || (finish_wait && line_free);
 assign write_end = timeout && main_writing && main_run;
 assign underrun = strict_tx && main_run && main_writing && !main_have_data && line_free && !main_pending && !main_listening && !write_end;
 assign i2c_break = i2c_target && (i2c_start || i2c_stop) && block_success[0];
@@ -239,6 +296,7 @@ always_ff@(posedge clk or negedge rst_n) begin
 		internal_cancel <= 1'b0;
 		commit_wait <= 1'b0;
 		outstanding <= '0;
+		queued <= '0;
 		end_configured <= 1'b0;
 		rearm_wait <= 1'b0;
 		internal_armed <= 1'b0;
@@ -250,16 +308,22 @@ always_ff@(posedge clk or negedge rst_n) begin
 		main_sr_sent <= 1'b0;
 		block_sr <= '0;
 		sr_sent <= '0;
+		reply_when <= '0;
+		reply_less <= '0;
+		reply_gap <= '0;
+		reply_pattern <= '0;
+		tail_remaining <= '0;
 		for (int k = 0; k < blocks; k++) begin
 			block_group[k] <= '0;
 		end
 	end else begin
-		outstanding <= outstanding + {4'd0, wire_accept} - {4'd0, tx_done} - {4'd0, discard};
+		outstanding <= outstanding + {4'd0, wire_accept} + {4'd0, tail_take} - {4'd0, tx_done} - {4'd0, discard};
+		queued <= queued + {4'd0, wire_accept} - {4'd0, tx_take} - {4'd0, discard};
 		start_prev <= block_success[0];
 		internal_cancel <= cancel_now;
 		if (frame_reset) begin
 			finish_wait <= 1'b0;
-		end else if (main_done && line_watch && main_writing) begin
+		end else if (main_done_eff && line_watch && main_writing) begin
 			finish_wait <= 1'b1;
 		end
 		if (i2c_target && i2c_start) begin
@@ -334,6 +398,21 @@ always_ff@(posedge clk or negedge rst_n) begin
 		end
 		if (cfg_we && cfg_sel == 4'd12) begin
 			msb <= cfg_compare[0];
+		end
+		if (cfg_we && cfg_sel == 4'd7) begin
+			reply_when <= cfg_main_cycles[7:6];
+			reply_less <= cfg_main_cycles[5:2];
+			reply_gap <= cfg_main_cycles[1:0];
+			reply_pattern <= {cfg_cycles, cfg_compare};
+		end
+		if (frame_reset) begin
+			tail_remaining <= '0;
+		end else if (tail_start) begin
+			tail_remaining <= tail_need;
+		end else if (tail_skip) begin
+			tail_remaining <= '0;
+		end else if (tail_advance) begin
+			tail_remaining <= tail_remaining & ~tail_step;
 		end
 		if (halt) begin
 			commit_wait <= 1'b0;
@@ -420,6 +499,8 @@ branch_unit #(
 	.block_success(block_success),
 	.block_values(block_values),
 	.mismatch(tx_mismatch),
+	.crc_event(crc_event),
+	.crc_good(crc_good),
 	.in_frame(block_success[0]),
 	.frame_reset(frame_reset),
 	.stall(branch_stall),
@@ -460,7 +541,7 @@ main_counter main_block (
 	.host_empty(host_empty),
 	.host_data(host_data),
 	.host_len(host_len),
-	.complete(main_done),
+	.complete(main_done_raw),
 	.byte_done(byte_done),
 	.listening(main_listening),
 	.pending(main_pending),
@@ -491,6 +572,113 @@ end_counter #(
 	.success(end_success)
 );
 
+always_comb begin
+	for (int k = 0; k < 8; k++) begin
+		covered[k] = crc_on && (k >= crc_from);
+	end
+	for (int r = 0; r < 8; r++) begin
+		start_wire[r] = (r < block_len[0]) ? block_value[0][block_len[0] - 1 - r] : 1'b0;
+	end
+	if (!msb) begin
+		start_wire = block_value[0];
+	end
+end
+
+assign rx_bit_feed = read_tick && ((|(block_listening[blocks-1:1] & covered[blocks-1:1])) || (main_listening && !main_writing && covered[7]));
+assign start_feed = block_success[0] && !start_prev && !block_writing[0] && covered[0] && (block_len[0] != 4'd0);
+assign tx_feed = wire_accept && (fifo_din[11:8] != 4'd0) && raw_covered;
+assign crc_feed = tx_feed || start_feed || rx_bit_feed;
+assign crc_restart = !block_success[0];
+
+always_comb begin
+	if (tx_feed) begin
+		crc_bits = fifo_din[7:0];
+		crc_len = fifo_din[11:8];
+	end else if (start_feed) begin
+		crc_bits = start_wire;
+		crc_len = block_len[0];
+	end else begin
+		crc_bits = {7'd0, input_bit};
+		crc_len = 4'd1;
+	end
+end
+
+crc_unit crc_block (
+	.clk(clk),
+	.rst_n(rst_n),
+	.cfg_we(cfg_we),
+	.cfg_sel(cfg_sel),
+	.cfg_rule(cfg_main_cycles[7:0]),
+	.cfg_high(cfg_cycles),
+	.cfg_low(cfg_compare),
+	.restart(crc_restart),
+	.feed(crc_feed),
+	.feed_bits(crc_bits),
+	.feed_len(crc_len),
+	.enabled(crc_on),
+	.check(crc_check),
+	.append(crc_append),
+	.cover_from(crc_from),
+	.width(crc_width),
+	.good(crc_good),
+	.crc_out(crc_out)
+);
+
+always_comb begin
+	for (int r = 0; r < 8; r++) begin
+		crc_first[r] = crc_out[15 - r];
+		crc_second[r] = crc_out[7 - r];
+	end
+end
+
+assign crc_first_len = (crc_width > 5'd8) ? 4'd8 : crc_width[3:0];
+assign crc_second_len = (crc_width > 5'd8) ? (crc_width[3:0] - 4'd8) : 4'd0;
+assign reply_len = {1'b0, reply_less} + 5'd1;
+assign reply_first_len = (reply_len > 5'd8) ? 4'd8 : reply_len[3:0];
+assign reply_second_len = (reply_len > 5'd8) ? (reply_len[3:0] - 4'd8) : 4'd0;
+assign reply_upper = reply_pattern >> (reply_len - 5'd8);
+assign reply_lower = reply_pattern & ~(16'hFFFF << (reply_len - 5'd8));
+assign reply_first = (msb && reply_len > 5'd8) ? reply_upper[7:0] : reply_pattern[7:0];
+assign reply_second = msb ? reply_lower[7:0] : reply_pattern[15:8];
+assign reply_fire = (reply_when == 2'd3) || (reply_when == 2'd1 && crc_good) || (reply_when == 2'd2 && crc_on && !crc_good);
+assign reply_armed = (reply_when != 2'd0);
+assign tail_need = {reply_armed && (reply_len > 5'd8), reply_armed, reply_armed, crc_append && main_writing && (crc_width > 5'd8), crc_append && main_writing, crc_check && !main_writing};
+assign main_done_eff = (main_done_raw && !(|tail_need)) || tail_done;
+assign tail_active = |tail_remaining;
+assign tail_start = main_done_raw && (|tail_need) && !tail_active;
+assign tail_step = tail_remaining & (~tail_remaining + 6'd1);
+assign tail_wire = (tail_step != 6'b000001);
+assign tail_push = tail_active && !tail_wire && !(|block_push) && !main_valid && !sr_accept && !out_full && space && !(abort && !branch_abort) && !halt;
+assign tail_valid = tail_active && tail_wire && !tail_skip && (queued == 5'd0) && !(|block_push) && !main_valid && !sr_accept && !abort && !halt && !internal_cancel;
+assign tail_take = tail_valid && tail_ready;
+assign tail_advance = tail_push || tail_take;
+assign tail_skip = tail_active && (tail_step == 6'b001000) && !reply_fire && !abort && !halt;
+assign tail_done = (tail_advance && ((tail_remaining & ~tail_step) == 6'd0)) || tail_skip;
+assign crc_event = tail_push && (tail_step == 6'b000001);
+
+always_comb begin
+	tail_bypass = 1'b0;
+	tail_entry = '0;
+	case (tail_step)
+		6'b000001: tail_entry = {1'b0, 4'hE, 6'd0, 1'b1, crc_good};
+		6'b000010: begin
+			tail_entry = {1'b1, crc_first_len, crc_first};
+			tail_bypass = 1'b1;
+		end
+		6'b000100: begin
+			tail_entry = {1'b1, crc_second_len, crc_second};
+			tail_bypass = 1'b1;
+		end
+		6'b001000: begin
+			tail_entry = {1'b1, 4'd0, 1'b1, 5'd0, reply_gap};
+			tail_bypass = 1'b1;
+		end
+		6'b010000: tail_entry = {1'b1, reply_first_len, reply_first};
+		6'b100000: tail_entry = {1'b1, reply_second_len, reply_second};
+		default: tail_entry = '0;
+	endcase
+end
+
 watchdog dog (
 	.clk(clk),
 	.rst_n(rst_n),
@@ -505,6 +693,11 @@ watchdog dog (
 always_comb begin
 	fifo_wr = 1'b0;
 	fifo_raw = '0;
+	raw_covered = 1'b0;
+	if (tail_push) begin
+		fifo_wr = 1'b1;
+		fifo_raw = tail_entry;
+	end
 	if (status_accept) begin
 		fifo_wr = 1'b1;
 		fifo_raw = {1'b0, 4'hF, status_flags};
@@ -516,11 +709,13 @@ always_comb begin
 	if (main_valid) begin
 		fifo_wr = 1'b1;
 		fifo_raw = {main_wire, main_len, main_data};
+		raw_covered = covered[7];
 	end
 	for (int j = blocks - 1; j >= 0; j--) begin
 		if (block_push[j]) begin
 			fifo_wr = 1'b1;
 			fifo_raw = {block_writing[j], block_len[j], block_value[j]};
+			raw_covered = covered[j];
 		end
 	end
 end
@@ -532,6 +727,16 @@ always_comb begin
 	reversed = flipped >> (4'd8 - fifo_raw[11:8]);
 	fifo_din = (msb && fifo_raw[12]) ? {fifo_raw[12:8], reversed} : fifo_raw;
 end
+
+always_comb begin
+	for (int r = 0; r < 8; r++) begin
+		tail_flipped[r] = tail_entry[7 - r];
+	end
+	tail_reversed = tail_flipped >> (4'd8 - tail_entry[11:8]);
+end
+
+assign tail_len = tail_entry[11:8];
+assign tail_data = (msb && !tail_bypass) ? tail_reversed : tail_entry[7:0];
 
 frame_buffer #(
 	.depth(buffer_depth),

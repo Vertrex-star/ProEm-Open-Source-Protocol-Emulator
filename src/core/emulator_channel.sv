@@ -75,6 +75,14 @@ logic code_error;
 logic tx_done;
 logic tx_ready;
 logic tx_valid;
+logic send_valid;
+logic send_ready;
+logic [7:0] send_data;
+logic [3:0] send_len;
+logic tail_valid;
+logic [7:0] tail_data;
+logic [3:0] tail_len;
+logic tx_take;
 logic out_rd_en;
 logic out_wire;
 logic out_empty;
@@ -124,10 +132,10 @@ line_codec codec (
 	.frame_mark(frame_mark),
 	.halt(halt),
 	.tx_cancel(tx_cancel),
-	.tx_valid(tx_valid),
-	.tx_len(tx_len),
-	.tx_data(tx_data),
-	.tx_ready(tx_ready),
+	.tx_valid(send_valid),
+	.tx_len(send_len),
+	.tx_data(send_data),
+	.tx_ready(send_ready),
 	.tx_done(tx_done),
 	.view(view),
 	.tick(tick),
@@ -185,6 +193,8 @@ frame_chain #(
 	.cfg_error(cfg_error),
 	.tx_done(tx_done),
 	.discard(discard),
+	.tx_take(tx_take),
+	.tail_ready(send_ready),
 	.strict_tx(strict_tx),
 	.tx_mismatch(tx_mismatch),
 	.i2c_target(i2c_target),
@@ -206,7 +216,10 @@ frame_chain #(
 	.listen(listen),
 	.armed(armed),
 	.in_frame(in_frame),
-	.tx_cancel(tx_cancel)
+	.tx_cancel(tx_cancel),
+	.tail_valid(tail_valid),
+	.tail_len(tail_len),
+	.tail_data(tail_data)
 );
 
 entry_dispatch dispatch (
@@ -229,5 +242,11 @@ entry_dispatch dispatch (
 	.frame_mark(frame_mark),
 	.discard(discard)
 );
+
+assign tx_ready = send_ready && !tail_valid;
+assign tx_take = tx_valid && tx_ready;
+assign send_valid = tx_valid || tail_valid;
+assign send_len = tail_valid ? tail_len : tx_len;
+assign send_data = tail_valid ? tail_data : tx_data;
 
 endmodule

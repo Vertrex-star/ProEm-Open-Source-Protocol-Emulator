@@ -13,7 +13,7 @@ RTL=$(grep -v '^//' src/files.f | tr '\n' ' ')
 YOSYS=${YOSYS:-$(command -v yosys || command -v yowasp-yosys)}
 SIMYOSYS=${SIMYOSYS:-$(command -v yowasp-yosys || echo $YOSYS)}
 RT=${CXXRTL_RUNTIME:-$(python3 -c "import yowasp_yosys,os;print(os.path.join(os.path.dirname(yowasp_yosys.__file__),'share/include/backends/cxxrtl/runtime'))" 2>/dev/null || echo "$($YOSYS-config --datdir)/include/backends/cxxrtl/runtime")}
-TESTS="t_control t_uart t_spi t_i2c t_ps2 t_ethernet t_manchester t_usb t_random t_i2c_target t_branch t_stream t_random_branch"
+TESTS="t_control t_uart t_spi t_i2c t_ps2 t_ethernet t_manchester t_usb t_random t_i2c_target t_branch t_stream t_random_branch t_crc"
 mkdir -p build
 $SIMYOSYS -q -p "read_verilog -sv $RTL; hierarchy -check -top protocol_emulator; proc; flatten; memory -nomap; opt; write_cxxrtl build/emu_sim.h" 2>&1 | grep -v "Replacing memory\|feedback" || true
 for t in $TESTS; do g++ -std=c++14 -O2 -I"$RT" -Ibuild sim/$t.cpp -o build/$t; done
@@ -43,6 +43,8 @@ echo "== DATA streamed during a frame, and underrun"
 ./build/t_stream
 echo "== randomised branch programs, 100 per seed"
 for m in 0 1; do for s in 1 2 3; do ./build/t_random_branch $s $m 100; done; done
+echo "== CRC: USB CRC16 and CRC5 with ACK reply, CAN CRC-15 with stuffing and ACK slot, random CRCs"
+./build/t_crc 60
 if [ -n "$SKIP_SYNTH" ]; then exit 0; fi
 for top in frame_chain line_codec protocol_emulator; do
   if [ -n "$LIBERTY" ]; then
