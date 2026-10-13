@@ -157,34 +157,28 @@ lines (I2C, USB) work on a single pad. A channel only drives its pads when `OUT`
 The GDS file, pictures of the layout and a summary of space, power, performance and the Jane Street
 challenge are in [gds/](gds/README.md).
 
-Hardened locally with the same flow the `gds` workflow uses (template branch `cmos5l`,
-LibreLane 3.1.0.dev3, IHP-Open-PDK at the commit the workflow installs), at the 6 × 4 tiles the
-Jane Street challenge sets:
+Hardened locally on 13 October 2026 (ISA v0.7.1) with the same flow the `gds` workflow uses
+(template branch `cmos5l`, LibreLane 3.1.0.dev3, IHP-Open-PDK at the commit the workflow
+installs), at the 6 × 4 tiles the Jane Street challenge sets:
 
 | | |
 | --- | --- |
 | Process | IHP SG13CMOS5L 130 nm |
 | Tiles | 6 × 4, 1289.28 × 710.64 µm |
-| Cells | 15,513 after synthesis; 19,737 after place and route, not counting fill (includes 3,266 hold buffers and 299 clock tree cells) |
-| Utilisation | 35 % of the core area; the lower third of the die is free |
+| Cells | 19,077 after synthesis; 25,606 after place and route, not counting fill (includes 6,064 timing repair buffers and 358 clock tree cells) |
+| Utilisation | 42 % of the core area |
 | Routing | 0 violations after detailed routing, 0 antenna violations |
-| Sign-off checks | Magic DRC 0 errors, LVS clean, Tiny Tapeout precheck passed (including the full KLayout CMOS5L DRC, on GitHub); cocotb gate-level tests pass |
-| Setup slack at 50 MHz | 8.9 ns typical, 2.6 ns slow (1.08 V, 125 °C), 12.5 ns fast |
-| Hold slack | 0.28 ns typical, 0.61 ns slow, 0.11 ns fast |
-| Maximum clock | 57 MHz at the slow corner, 90 MHz typical |
-| Power | about 8.9 mW at 50 MHz (7.0 to 11.0 mW across corners) |
+| Sign-off checks | Magic DRC 0 errors, LVS clean, no illegal overlaps; cocotb gate-level tests pass on the routed netlist |
+| Setup slack at 50 MHz | 5.0 ns typical (the sign-off corner), −3.8 ns slow (1.08 V, 125 °C), 10.1 ns fast |
+| Hold slack | 0.29 ns typical, 0.60 ns slow, 0.11 ns fast |
+| Maximum clock | 66 MHz typical, 42 MHz at the slow corner |
+| Power | about 9.9 mW at 50 MHz (7.9 to 12.3 mW across corners) |
 
-The CMOS5L flow only checks timing at the typical corner. With the template's default settings
-the slow corner missed by 1.2 ns, so `src/config.json` limits signal transitions to 0.75 ns
-(`MAX_TRANSITION_CONSTRAINT`) and gives the resizer more setup margin; every corner now passes.
-
-### Running the cocotb test
-
-```sh
-pip install -r test/requirements.txt   # cocotb, pytest; also needs Icarus Verilog
-cd test && make -B                     # RTL
-make -B GATES=yes                      # gate level, after copying the netlist from the gds run
-```
+The CMOS5L flow only checks timing at the typical corner, which passes with a third of the
+period to spare. The slow corner, met by the September layout, now misses by 3.8 ns on one path
+added with the CRC unit: from a frame's `in_frame` flag through the branch rules and the cancel
+decision into the CRC update. See [docs/verification_report.pdf](docs/verification_report.pdf).
+The picture and the files in [gds/](gds/README.md) are from the September layout (ISA v0.5).
 
 ## Running the tests
 
@@ -259,12 +253,11 @@ python docs/diagram/make_diagram.py      # writes docs/protocol_emulator_archite
 
 ## Status and limits
 
-All tests pass, and the design places, routes and meets timing on 6 × 4 Tiny Tapeout tiles on
-the CMOS5L template.
+All tests pass, and the design places, routes and meets timing at the sign-off corner on
+6 × 4 Tiny Tapeout tiles on the CMOS5L template (the slow corner misses by 3.8 ns, see Layout).
 Known limits are listed in the design reference; the main ones are the return link bandwidth
 (full-size Ethernet frames overflow and are reported), the instruction link rate when feeding
-fast fixed-timing lines. The CRC unit and reply are new since the last hardening, so the layout
-figures above are from before them. Still to do:
+fast fixed-timing lines. Still to do:
 formal proofs for the UART receiver and the frame chain counters, and a Quartus compile
 (so far checked with Yosys, Verilator and Icarus).
 
