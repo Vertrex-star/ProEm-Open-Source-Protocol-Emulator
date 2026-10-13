@@ -24,3 +24,16 @@ jobs:
         run: pip install yowasp-yosys
       - name: Run every test
         run: SKIP_SYNTH=1 bash scripts/run.sh
+      - name: Install sigrok-cli
+        run: sudo apt-get update && sudo apt-get install -y sigrok-cli
+      - name: Decode the standards waveforms with sigrok
+        run: python3 scripts/sigrok_check.py
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Verilator
+        run: sudo apt-get update && sudo apt-get install -y verilator
+      - name: Lint with every warning on
+        run: bash scripts/lint.sh

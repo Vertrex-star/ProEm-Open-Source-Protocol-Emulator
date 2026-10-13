@@ -35,7 +35,7 @@
 
 \title{ProEm: The Line Codec\\\large \sig{src/core/line\_codec.sv}}
 \author{Paul Vincent Bezzina}
-\date{11 October 2026}
+\date{13 October 2026}
 
 \begin{document}
 \maketitle
@@ -371,7 +371,7 @@ Every state returns to \sig{T\_IDLE} when it is done; \sig{T\_BIT} stays as long
 \item An end pending: STOP on an I\textsuperscript{2}C controller (\sig{T\_STOP}), end of packet if enabled (\sig{T\_EOP}), otherwise just close the packet.
 \end{enumerate}
 
-A \sig{tx\_cancel} overrides everything: it goes to \sig{T\_IDLE}, clears the packet, I\textsuperscript{2}C and stuffing state, and sets \sig{dropCount} to the number of entries it threw away (the one being shifted, if any, plus the waiting one), so \sig{tx\_done} is still pulsed once for each over the next clocks.
+A \sig{tx\_cancel} overrides everything: it goes to \sig{T\_IDLE}, clears the packet, I\textsuperscript{2}C and stuffing state, and adds to \sig{dropCount} the number of entries it threw away (the one being shifted, if any, plus the waiting one), so \sig{tx\_done} is still pulsed once for each over the next clocks. While \sig{dropCount} is not zero the state machine waits in \sig{T\_IDLE}, so no other \sig{tx\_done} can fall on the same clock, and a second cancel adds to the count instead of overwriting it. (Before 13 October 2026 a second cancel within two clocks, or a dropped entry answered on the same clock as the next entry, lost one \sig{tx\_done}; the chain then waited for it forever. The formal proof in \sig{formal/line\_codec\_formal.sv} found it.)
 
 \subsection{Packets}
 
@@ -400,7 +400,8 @@ Generated & Two phases of \sig{div} clocks each. Phase A (\sig{phaseB} = 0) hold
 
 \paragraph{Generated clock details.}
 \begin{itemize}
-\item \sig{sampleLeading} says whether the chain samples on the A-to-B edge (the middle of the bit) or on the B-to-A edge (the end). It is true when \sig{edgeSel} is ``both'', or when the chosen edge is the one that leaves the idle level. SPI modes 0 and 3 sample on the leading edge; modes 1 and 2 on the trailing one. \sig{genTick} pulses on the chosen edge, which is how the chain gets its tick in this mode.
+\item \sig{sampleLeading} says whether the chain samples on the A-to-B edge (the middle of the bit) or on the B-to-A edge (the end). It is true when \sig{edgeSel} is ``both'', or when the chosen edge is the one that leaves the idle level. SPI modes 0 and 2 (CPHA 0) sample on the leading edge; modes 1 and 3 (CPHA 1) on the trailing one. \sig{genTick} pulses on the chosen edge, which is how the chain gets its tick in this mode.
+\item With a trailing-edge sample (SPI CPHA 1) the data pin keeps the previous bit (\sig{holdLevel}) through phase A and changes to the new bit on the leading edge, so it is steady for a whole phase on either side of the device's sampling edge. Before 13 October 2026 it changed at the start of phase A, on the same clock as the device's sampling edge, which leaves no hold time.
 \item Clock stretching: in phase B, with open drain, the codec has released the clock and waits until the clock read-back (\sig{clockIn}, the clock pin) is actually high (\sig{clockHigh}) before it starts counting. A slow I\textsuperscript{2}C device holding SCL low therefore just lengthens the bit.
 \item The clock only runs while there is something to do: a bit to send (\sig{T\_BIT}) or a read block listening (\sig{T\_READ}). Between bytes on I\textsuperscript{2}C the controller holds SCL low.
 \item Where the sample falls. \sig{genTick} is registered and the input pins are three clocks late, so with a push-pull clock the chain sees the line as it was about one system clock before the chip's sampling edge, which suits any device that changes its output on or after that edge (MDIO, SPI). With an open-drain clock the codec first waits for the read-back to show the clock high, so the sample is taken just after the edge; I\textsuperscript{2}C needs this because a target may change SDA while it stretches SCL.
@@ -509,13 +510,15 @@ The reply that follows therefore starts exactly on the bit grid of the frame it 
 State & \sig{level} (data) & \sig{clockLevel} \\
 \midrule
 \sig{T\_IDLE}, \sig{T\_WAIT} & \sig{idleLevel} & I\textsuperscript{2}C: low while busy, high when free. Otherwise \sig{clockIdle}. \\
-\sig{T\_BIT} & \sig{bitLevel} & phase A: \sig{phaseAClock}; phase B: the opposite \\
+\sig{T\_BIT} & \sig{bitLevel}, see below & phase A: \sig{phaseAClock}; phase B: the opposite \\
 \sig{T\_READ} & released (1 open drain, else \sig{outIdle}) & as \sig{T\_BIT} \\
 \sig{T\_START}, \sig{T\_REPEAT}, \sig{T\_STOP} & per step (table above) & per step \\
 \sig{T\_EOP} & 0 on a pair (SE0, then J), 1 otherwise & \sig{clockIdle} \\
 \bottomrule
 \end{tabularx}
 \end{center}
+
+In \sig{T\_BIT}, phase A of a generated clock that samples on the trailing edge (and is not I\textsuperscript{2}C) shows \sig{holdLevel}, the previous bit, instead of \sig{bitLevel}, so the data changes on the leading edge.
 
 \sig{idleLevel} is \sig{holdLevel} inside a packet (except an I\textsuperscript{2}C target with open drain), otherwise 1 with open drain or \sig{outIdle} with push-pull.
 
@@ -606,8 +609,10 @@ Stuffing with \sig{stuffAny}, wait entry & \sig{t\_crc} (CAN from a node model a
 SYNC source, \sig{shiftEdge} & \sig{t\_spi} (target), \sig{t\_ps2}, \sig{t\_i2c\_target} \\
 Generated clock, stretching, I\textsuperscript{2}C conditions, \sig{T\_READ} & \sig{t\_i2c}, \sig{t\_spi} (controller), cocotb SPI and I\textsuperscript{2}C loopbacks \\
 I\textsuperscript{2}C target detection & \sig{t\_i2c\_target}, cocotb I\textsuperscript{2}C loopback \\
+Generated clock in all four SPI modes, trailing-edge sampling & \sig{t\_modes} (device model with no hold margin) \\
 Read-back mismatch, cancel & \sig{t\_branch} (CAN-style arbitration), \sig{t\_stream} (underrun) \\
 Random programs through the codec & \sig{t\_random}, \sig{t\_random\_branch} \\
+Entry accounting, cancels, output enables & \sig{formal/line\_codec.sby}: unbounded proof with every configuration free \\
 \bottomrule
 \end{tabularx}
 \end{center}

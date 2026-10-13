@@ -30,12 +30,12 @@
 \pagestyle{fancy}
 \fancyhf{}
 \lhead{\small Paul Vincent Bezzina \textbar{} ProEm - Open Source Protocol Emulator}
-\rhead{\small ISA draft v0.7}
+\rhead{\small ISA draft v0.7.1}
 \cfoot{\small\thepage}
 
-\title{ProEm Instruction Set\\\large Draft v0.7}
+\title{ProEm Instruction Set\\\large Draft v0.7.1}
 \author{Paul Vincent Bezzina}
-\date{11 October 2026}
+\date{13 October 2026}
 
 \begin{document}
 \maketitle
@@ -755,6 +755,14 @@ C7 id[10:3]   C2 id[2:0]   C7 data   72
 \end{lstlisting}
 
 A lost arbitration stops the chip driving within the same bit and reports \texttt{C2}; the winning frame continues undisturbed on the line and can be received by the other chain. The arbitration test runs without bit stuffing. \vsix{} \sig{LINE} \sig{STUFF} = 5 with \sig{SANY} = 1 is now tested on its own: a CAN frame with stuffing is received, its CRC-15 checked, and the acknowledge driven into the ACK slot, both from a node model and chip to chip.
+
+\section{Corrections in v0.7.1}
+
+No instruction changes; two behaviours now match what this document already describes.
+\begin{itemize}
+\item \sig{CLOCK} GENERATE with an \sig{EDGE} that samples on the trailing edge (SPI modes 1 and 3): the data output now changes on the leading edge, half a clock period before the device samples, instead of on the trailing edge itself. Modes 0 and 2 and I\textsuperscript{2}C are unchanged.
+\item A frame abort that cancels queued bits (\sig{BRANCH} abort, underrun, I\textsuperscript{2}C target abort) can no longer lose a bit-done report when a second cancel or the next frame follows within two clocks. Before, the channel could stop listening until \sig{CLEAR}.
+\end{itemize}
 
 \section{Changes in v0.7}
 

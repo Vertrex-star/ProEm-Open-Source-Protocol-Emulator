@@ -218,14 +218,16 @@ Every test resets the chip, sends `0x55` for auto-baud, programs it with instruc
 | `t_stream` | underrun abort; 12-byte UART and 20-byte SPI frames fed while running |
 | `t_random_branch` | 600 random branch programs: capture-any header, random rules, actions and run modes |
 | `t_standards` | 16 more standards, receive and transmit (42 checks), including RC5 infrared and the v0.7 features: RS-232/422/485 with driver enable, MIDI, NMEA 0183, PROFIBUS DP, Modbus RTU, DMX512, LIN master and slave, K-Line fast init, SDI-12, SMBus with PEC, MDIO, SD card CMD0/CMD8 with CRC-7, 3-wire SPI, DALI, CAN 2.0B extended (NMEA 2000) |
+| `t_modes` | SPI controller in all four modes against a device that needs hold time; both BRANCH rules; NOP |
 | `t_crc` | USB CRC-16 receive with ACK reply, CRC-5 tokens, USB transmit with CRC appended; CAN with stuffing, CRC-15 and ACK slot from a node model and chip to chip; 60 random CRCs looped chip to chip |
 
 ## Formal proofs
 
-Five modules are proven with [SymbiYosys](https://github.com/YosysHQ/sby), for every possible
+Six modules are proven with [SymbiYosys](https://github.com/YosysHQ/sby), for every possible
 input sequence and with no depth limit: the host FIFO, the frame buffer (including commit and
 rollback), the UART transmitter (for every clocks-per-bit value), the branch unit (against a
-model of the BRANCH rules) and the CRC unit (against a bit-by-bit CRC of every width). Most take
+model of the BRANCH rules), the CRC unit (against a bit-by-bit CRC of every width) and the line
+codec's entry accounting and output enables (every configuration left free). Most take
 a few seconds; the CRC proof takes about four minutes. With the
 [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build) installed:
 
@@ -235,6 +237,18 @@ bash scripts/formal.sh
 
 [formal/README.md](formal/README.md) lists what each proof covers, and
 [docs/formal_verification_guide.pdf](docs/formal_verification_guide.pdf) explains the method.
+
+## Other checks
+
+```sh
+bash scripts/lint.sh                  # Verilator -Wall, reviewed waivers in lint/waivers.vlt
+bash scripts/coverage.sh              # every pin-level test on Verilator, line coverage in build/cov
+python3 scripts/sigrok_check.py       # standards waveforms decoded by sigrok-cli's protocol decoders
+PDK_ROOT=path/to/IHP-Open-PDK bash scripts/synth_ihp.sh typ_1p20V_25C   # area and logic depth in CMOS5L cells
+```
+
+[docs/verification_report.pdf](docs/verification_report.pdf) gives the results and the two
+bugs they found.
 
 ## Regenerating the diagram
 
@@ -251,7 +265,7 @@ Known limits are listed in the design reference; the main ones are the return li
 (full-size Ethernet frames overflow and are reported), the instruction link rate when feeding
 fast fixed-timing lines. The CRC unit and reply are new since the last hardening, so the layout
 figures above are from before them. Still to do:
-formal proofs for the UART receiver, frame chain counters and line codec, and a Quartus compile
+formal proofs for the UART receiver and the frame chain counters, and a Quartus compile
 (so far checked with Yosys, Verilator and Icarus).
 
 ## Licence

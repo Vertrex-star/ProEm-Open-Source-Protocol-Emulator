@@ -42,7 +42,7 @@ int main(int argc,char**argv){ if(argc>1) INS_R=atoi(argv[1]); env=c_env; power_
   ok&=check("LINK 5: frame read back over a 5-clock link",{{8,0xD5},{8,0x0F},{8,0xF0}},{1});
   program(I_link(0)); RET_R=0;
   program(B{0xF7,0,0,0}); CH=0; program(I_hdr(7,0,8,0,0)); wait_return();
-  ok&=report("BRANCH rule 4 and HDR 7 -> cmd_error flag",global_flags.size()>=1&&(global_flags[0]&2),showst(global_flags)); global_flags.clear();
+  ok&=report("BRANCH 7 and HDR 7 -> cmd_error flag",global_flags.size()>=1&&(global_flags[0]&2),showst(global_flags)); global_flags.clear();
   send_byte(0x00,0); settle(); wait_return();
   ok&=report("stop bit low -> rx_error flag",global_flags.size()==1&&global_flags[0]==1,showst(global_flags)); global_flags.clear();
   program(cat({I_clear(),I_start(0,1,0,1),I_main(64,1)})); { B p; for(int i=0;i<9;i++){ B x=I_data(8,i); p.insert(p.end(),x.begin(),x.end()); } program(p); } wait_return();

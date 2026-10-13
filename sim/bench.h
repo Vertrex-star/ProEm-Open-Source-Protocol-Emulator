@@ -36,7 +36,13 @@ void ret_decode(){ int r=RET_R?RET_R:INS_R; int lv=t.p_tx__serial.get<bool>();
     if(ret_bytes.size()==2){ unsigned h=ret_bytes[0], v=ret_bytes[1]; ret_bytes.clear();
       if((h&0xC0)==0xC0) global_flags.push_back(v);
       else { int c=(h>>5)&1; unsigned len=h&15; if(len==15) status[c].push_back(v); else got[c].push_back({len,v}); } } } }
-void clk(){ int lv=1; if(!serial.empty()){ lv=serial.front(); serial.pop_front(); } t.p_rx__serial.set<bool>(lv); t.p_pin__in.set<unsigned>(pin_in);
+FILE*vcd=nullptr; unsigned vcd_last=0xFFFFFFFF;
+void vcd_open(){ const char*f=getenv("PROEM_VCD"); if(!f) return; vcd=fopen(f,"w"); if(!vcd) return;
+  fprintf(vcd,"$timescale 20 ns $end\n$scope module proem $end\n"); for(int i=0;i<8;i++) fprintf(vcd,"$var wire 1 %c p%d $end\n",'a'+i,i);
+  fprintf(vcd,"$var wire 1 i rx_serial $end\n$var wire 1 j tx_serial $end\n$var wire 1 k select_a $end\n$var wire 1 l select_b $end\n$upscope $end\n$enddefinitions $end\n"); }
+void vcd_sample(){ if(!vcd) return; unsigned v=(pin_in&0xFF)|((unsigned)t.p_rx__serial.get<bool>()<<8)|((unsigned)t.p_tx__serial.get<bool>()<<9)|((unsigned)t.p_select__out__a.get<bool>()<<10)|((unsigned)t.p_select__out__b.get<bool>()<<11);
+  if(vcd_last==0xFFFFFFFF) vcd_last=~v&0xFFF; if(v==vcd_last) return; fprintf(vcd,"#%ld\n",cycles); for(int i=0;i<12;i++) if(((v^vcd_last)>>i)&1) fprintf(vcd,"%d%c\n",(v>>i)&1,'a'+i); vcd_last=v; }
+void clk(){ vcd_sample(); int lv=1; if(!serial.empty()){ lv=serial.front(); serial.pop_front(); } t.p_rx__serial.set<bool>(lv); t.p_pin__in.set<unsigned>(pin_in);
   t.p_clk.set<bool>(0); t.step(); t.p_clk.set<bool>(1); t.step(); cycles++; ret_decode(); env(); }
 void idle(long n){ for(long i=0;i<n;i++) clk(); }
 void put_level(int v){ for(int i=0;i<INS_R;i++) serial.push_back(v); }
@@ -72,7 +78,7 @@ std::vector<int> crc_tx(unsigned c,int width,int inv){ if(inv) c=~c&0xFFFF; std:
 std::vector<int> byte_bits(const std::vector<unsigned>&bytes,int msb){ std::vector<int> o; for(unsigned b:bytes) for(int k=0;k<8;k++) o.push_back(msb?((b>>(7-k))&1):((b>>k)&1)); return o; }
 B cat(std::initializer_list<B> parts){ B o; for(auto&p:parts) o.insert(o.end(),p.begin(),p.end()); return o; }
 enum { SYNC=0, ASYNC=1, GENERATE=2, RECOVER=3 };
-void power_on(){ t.p_rx__serial.set<bool>(true); t.p_pin__in.set<unsigned>(pin_in); t.p_rst__n.set<bool>(0); t.step(); t.p_rst__n.set<bool>(1); t.step(); idle(20); send_byte(0x55); settle(); }
+void power_on(){ vcd_open(); t.p_rx__serial.set<bool>(true); t.p_pin__in.set<unsigned>(pin_in); t.p_rst__n.set<bool>(0); t.step(); t.p_rst__n.set<bool>(1); t.step(); idle(20); send_byte(0x55); settle(); }
 bool baud_ok(){ return t.p_baud__locked.get<bool>(); }
 unsigned rev8(unsigned v){ unsigned o=0; for(int i=0;i<8;i++) if((v>>i)&1) o|=1u<<(7-i); return o; }
 void clear_results(){ for(int c=0;c<2;c++){ got[c].clear(); status[c].clear(); } global_flags.clear(); }

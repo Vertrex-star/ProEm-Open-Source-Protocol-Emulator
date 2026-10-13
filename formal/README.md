@@ -11,6 +11,7 @@ small reference model and assertions, then runs [SymbiYosys](https://github.com/
 | `uart_tx` | Every frame is a start bit, 8 data bits LSB first, and a stop bit, each held for exactly `clk_ratio` clocks, for every ratio from 1 to 15; the line idles high and `tx_ready` is exact | `abc pdr` (unbounded) |
 | `branch_unit` | The two BRANCH rules behave as the ISA describes: compare with mask and value, hit and miss actions, read-back mismatch and CRC-result sources, rule 0 before rule 1, each rule acts at most once per frame, `stall`, `hit`, `branch_abort` and `line_watch` timing | `abc pdr` (unbounded) |
 | `crc_unit` | The 8-bit-per-clock update equals a bit-by-bit CRC of the configured width (1 to 16, any polynomial, any chunk of 1 to 8 bits), kept right aligned; `good` is exactly "register equals residue"; `crc_out` is the register top aligned, inverted when asked; feeding the register its own value top bit first always leaves zero (so an appended CRC checks with residue 0); the configuration outputs match the last write | `abc pdr` (unbounded) |
+| `line_codec` | Entry accounting against a reference count: `tx_done` is never pulsed without an outstanding entry, at most four entries are ever outstanding, and whenever the codec has been idle (select output inactive) for three clocks every accepted entry has been answered with exactly one `tx_done`, including entries dropped by `tx_cancel` and cancels that arrive while earlier drops are still being answered; with DRIVE 00 no output enable is ever set; with open drain the data and clock outputs only ever pull low; the clock output is only enabled when the codec generates the clock. Every line, clock and output configuration is left free and may change at any time | `abc pdr` (unbounded) |
 
 Every job also has a `cover` task that shows the interesting cases are reachable (the FIFO fills,
 a tracked value is read back, both rules fire together), so a proof cannot pass by accident.
@@ -37,4 +38,4 @@ results as an artifact.
 ## Not yet covered
 
 `uart_rx` (the auto-baud measurement makes the state space large), the counters in the frame chain,
-the line codec and the control unit. These are checked by the simulation suites instead.
+the bit-level timing of the line codec and the control unit. These are checked by the simulation suites instead.

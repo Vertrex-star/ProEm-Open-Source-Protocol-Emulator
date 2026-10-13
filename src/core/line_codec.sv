@@ -149,7 +149,6 @@ logic sendBit;
 logic nrziLevel;
 logic holdLevel;
 logic stuffing;
-logic stuffBit;
 logic txRunValue;
 logic phaseB;
 logic packetActive;
@@ -362,7 +361,6 @@ always_ff @(posedge clk or negedge rst_n) begin
 		nrziLevel <= 1'b0;
 		holdLevel <= 1'b0;
 		stuffing <= 1'b0;
-		stuffBit <= 1'b0;
 		txRun <= '0;
 		txRunValue <= 1'b0;
 		phaseB <= 1'b0;
@@ -390,7 +388,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 		end
 
 		if (tx_cancel) begin
-			dropCount <= {1'b0, (state == T_BIT)} + {1'b0, nextValid};
+			dropCount <= dropCount - {1'b0, (dropCount != 2'd0)} + {1'b0, (state == T_BIT)} + {1'b0, nextValid};
 			nextValid <= 1'b0;
 			state <= T_IDLE;
 			txCount <= '0;
@@ -399,7 +397,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 			stuffing <= 1'b0;
 			packetActive <= 1'b0;
 			i2cBusy <= 1'b0;
-		end else begin
+		end else if (dropCount == 2'd0) begin
 			unique case (state)
 				T_IDLE: begin
 					txCount <= '0;
@@ -466,7 +464,6 @@ always_ff @(posedge clk or negedge rst_n) begin
 						holdLevel <= level;
 						if (willStuff) begin
 							stuffing <= 1'b1;
-							stuffBit <= stuffValue;
 						end else begin
 							stuffing <= 1'b0;
 						end
@@ -649,7 +646,7 @@ always_comb begin
 			clockLevel = i2c ? !i2cBusy : clockIdle;
 		end
 		T_BIT: begin
-			level = bitLevel;
+			level = (generating && !i2c && !sampleLeading && !phaseB) ? holdLevel : bitLevel;
 			clockLevel = phaseB ? !phaseAClock : phaseAClock;
 		end
 		T_READ: begin
