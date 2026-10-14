@@ -62,7 +62,7 @@ A(f'<rect width="{W}" height="{H}" fill="{C["bg"]}"/>')
 
 T(60,80,"ProEm · Protocol Emulator ASIC",48,w=700,anchor="start",fam="disp")
 T(W-60,72,"Paul Vincent Bezzina  |  Open Source Protocol Emulator",20,C["muted"],anchor="end",w=500)
-T(60,118,"Full architecture · ISA v0.7 · IHP 130 nm through Tiny Tapeout (6 × 4 tiles) · 50 MHz system clock",20,C["muted"],anchor="start")
+T(60,118,"Full architecture · ISA v0.7.1 · IHP 130 nm through Tiny Tapeout (6 × 4 tiles) · 50 MHz system clock",20,C["muted"],anchor="start")
 
 rect(300,160,2100,1300,"none",C["muted"],r=16,sw=1.6,dash="10 7")
 T(322,190,"CHIP · protocol_emulator",15,C["muted"],anchor="start",w=500,fam="mono")
@@ -71,7 +71,7 @@ box(40,220,220,1220,"RP2040",["host / demo board","","sends ISA bytes","0x55 fir
 box(2440,220,320,1220,"Bus & pads",["pin_in[7:0] → chip","","per channel, each with","an output enable:","data · pair (D−)","clock · select","","open drain: enable","pulls the pad low","","bidirectional pads","(SDA, SCL, D+, D−)","are read back","through pin_in","","UART · SPI · I²C · PS/2","10BASE-T · USB LS · CAN"],"plain",28,14)
 
 box(330,220,290,120,"UART receiver",["auto-baud on 0x55 (8 bit times)","8N1 → byte + valid","rx_error on a low stop bit"],"cf",20)
-box(330,380,290,300,"Control unit",["ISA v0.7 decoder","opcode · CH · N + 0–4 operands","","registered cfg bus → chain A / B","RUN · HALT · CLEAR pulses","DATA → host FIFO · BRANCH: rules,","CRC set-up and reply pattern","LINE · CLOCK · OUT per channel","LINK divider for the return","cmd_error on bad BRANCH / HDR"],"cf",22)
+box(330,380,290,300,"Control unit",["ISA v0.7.1 decoder","opcode · CH · N + 0–4 operands","","registered cfg bus → chain A / B","RUN · HALT · CLEAR pulses","DATA → host FIFO · BRANCH: rules,","CRC set-up and reply pattern","LINE · CLOCK · OUT per channel","LINK divider for the return","cmd_error on bad BRANCH / HDR"],"cf",22)
 box(330,1250,290,180,"Return path",["round robin: A · B · link events","2-byte messages","{10 C 0 len} + value","len 14 = CRC result","len 15 = frame status","UART TX at the LINK rate"],"gold",22)
 line([(262,280),(328,280)],C["cf"]); labbg(295,270,"rx_serial",C["cf"])
 line([(475,340),(475,378)],C["cf"])
@@ -83,11 +83,11 @@ line([(2270,340),(2270,1140)],C["rx"],arrow=False,sw=2.6)
 
 rect(650,200,1490,860,C["surf"],C["ink"],r=16,sw=2.2)
 T(672,230,"CHANNEL A",16,C["ink"],anchor="start",w=600,fam="mono")
-T(2120,230,"emulator_channel · 8,182 cells",14,C["muted"],anchor="end")
+T(2120,230,"emulator_channel · 8,707 cells",14,C["muted"],anchor="end")
 
 rect(680,250,880,515,"#FBFDFC",C["rx"],r=12,sw=2)
 T(700,278,"FRAME CHAIN",15,C["rx"],anchor="start",w=600,fam="mono")
-T(1540,278,"6,307 cells (CRC 961) · one bit per tick",13,C["muted"],anchor="end")
+T(1540,278,"6,753 cells (CRC 846) · one bit per tick",13,C["muted"],anchor="end")
 names=["START","HDR 1","HDR 2","HDR 3","HDR 4","HDR 5","HDR 6"]
 subs=[["own pin","match, level","or write"]]+[["1–8 bits","compare,","capture, write"]]*6
 for i,nm in enumerate(names):
@@ -104,7 +104,7 @@ box(1405,486,135,184,"Watchdog",["no bit, entry","or tx_done","for N clocks","�
 line([(1170,578),(1183,578)],C["gold"],sw=1.8)
 line([(880,578),(893,578)],C["tx"],sw=1.8)
 line([(1120,466),(1120,484)],C["ink"],sw=1.8)
-box(990,680,350,78,"CRC unit + tail",["1–16 bits in wire order: check (8E / AE) or append;","byte fields, across frames · reply after good / bad"],"rx",16,12)
+box(990,680,350,78,"CRC unit + tail",["1–16 bits in wire order, input registered: check (8E / AE)","or append; byte fields, across frames · reply after good / bad"],"rx",16,12)
 line([(1132,672),(1132,680)],C["rx"],sw=1.6)
 line([(1340,714),(1612,714),(1612,822),(1658,822)],C["tx"],sw=2); lab(1480,706,"CRC, reply (direct)",C["tx"],"middle",size=12)
 
@@ -116,7 +116,7 @@ line([(1360,672),(1360,788)],C["gold"],sw=2)
 
 rect(1640,250,480,780,"#FAFCFE",C["cd"],r=12,sw=2)
 T(1660,278,"LINE CODEC",15,C["cd"],anchor="start",w=600,fam="mono")
-T(2100,278,"1,560 cells · LINE · CLOCK · OUT",13,C["muted"],anchor="end")
+T(2100,278,"1,597 cells · LINE · CLOCK · OUT",13,C["muted"],anchor="end")
 box(1660,296,440,150,"Tick source (CLOCK)",["SYNC: an edge of a clock pin","ASYNC / RECOVER: 22-bit bit timer (12 bit/s and up),","mid-bit sample, re-centred on every edge","GENERATE: drives SCK / SCL, waits for stretching"],"cd",19,13)
 box(1660,462,440,196,"Decoder (LINE)",["NRZ · NRZI · NRZI pair (J / K, SE0, SE1)","Manchester: mid-bit edges, ¾-bit blanking, boundary lock","unstuffer: drop the bit after n equal bits","decoded bit replaces PIN_A, one tick per bit","stuff error → abort (not while sending)"],"cd",19,13)
 box(1660,674,440,340,"Encoder (LINE + OUT)",["1-entry holding register from the dispatcher","NRZ · NRZI (from J) · Manchester","stuff bit after n equal bits","I²C controller: START · Sr · STOP","I²C target: START / STOP detect, drive after SCL falls","end of packet: SE0 SE0 J, or 2 bits high","read-back check of the driven pad → branch","wait entry: reply gap on the receive bit grid","cancel: drop queued bits, release the line","drive: off · while sending (released for reads) · open drain · always","outputs: data · pair · clock · select"],"cd",19,12.5)
@@ -166,19 +166,19 @@ T(60,1744,"plus 16 more standards, receive and transmit: RS-232/422/485 · MIDI 
 T(60,1768,"and 1,800 random programs, 600 random branch programs, 60 random CRCs chip to chip, SWD-style acknowledge, streaming and underrun, control tests: auto-baud, HALT, CLEAR, LINK, watchdog, error flags",15,C["muted"],anchor="start")
 
 T(60,1806,"Where the logic cells go",28,w=700,anchor="start",fam="disp")
-T(372,1806,"IHP cells per block (hierarchical synthesis) · whole design flattened: 18,366 of ~24,000 · layout to be re-closed for ISA v0.7",16,C["muted"],anchor="start")
-parts=[("Chain A",5346,C["rx"]),("CRC A",961,"#0E5A55"),("Codec A",1560,C["cd"]),("Host FIFO A",281,C["tx"]),("Chain B",5346,"#3E9C95"),("CRC B",961,"#2C7A74"),("Codec B",1560,"#6F8FC0"),("Host FIFO B",281,"#D98A5C"),
-       ("Control unit",957,C["cf"]),("UART RX",394,"#9A90D0"),("Return path",286,C["gold"])]
-x0,y0,wt=60,1826,2680; total=24000
+T(372,1806,"IHP cells per block (hierarchical synthesis, 19,145 in all) · routed layout: 25,612 cells with repair buffers and clock tree, 43 % of the core · timing met at every corner",16,C["muted"],anchor="start")
+parts=[("Chain A",5907,C["rx"]),("CRC A",846,"#0E5A55"),("Codec A",1597,C["cd"]),("Host FIFO A",319,C["tx"]),("Chain B",5907,"#3E9C95"),("CRC B",846,"#2C7A74"),("Codec B",1597,"#6F8FC0"),("Host FIFO B",319,"#D98A5C"),
+       ("Control unit",961,C["cf"]),("UART RX",434,"#9A90D0"),("Return path",324,C["gold"]),("Repair + clock tree",6467,"#B9C4C1")]
+x0,y0,wt=60,1826,2680; total=25612/0.43
 rect(x0,y0,wt,46,"#E6ECEA",C["rule"],r=6)
 x=x0
 for name,v,c in parts:
     w=wt*v/total
     A(f'<rect x="{x:.1f}" y="{y0}" width="{w:.1f}" height="46" fill="{c}"/>'); x+=w
-T(x+18,y0+30,"free ≈ 5,600 cells",16,C["muted"],anchor="start",w=500)
-T(x0+wt-12,y0+30,"budget ≈ 24,000",15,C["muted"],anchor="end",w=500)
+T(x+18,y0+30,"free ≈ 57 % of the core area",16,C["muted"],anchor="start",w=500)
+T(x0+wt-12,y0+30,"6 × 4 tiles",15,C["muted"],anchor="end",w=500)
 for i,(name,v,c) in enumerate(parts):
-    xx=x0+i*244; yy=y0+80
+    xx=x0+i*224; yy=y0+80
     A(f'<rect x="{xx}" y="{yy-13}" width="16" height="16" rx="3" fill="{c}"/>')
     T(xx+24,yy,f"{name} · {v:,}",14,C["ink"],anchor="start")
 A('</svg>')
