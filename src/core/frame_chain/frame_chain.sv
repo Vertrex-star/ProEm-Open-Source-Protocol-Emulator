@@ -108,6 +108,10 @@ logic[12:0] fifo_din;
 logic[12:0] fifo_raw;
 logic[7:0] reversed;
 logic[7:0] flipped;
+logic[12:0] tx_raw;
+logic[7:0] tx_flipped;
+logic[7:0] tx_data;
+logic tx_covered;
 logic[4:0] outstanding;
 logic[4:0] queued;
 logic[7:0] status_flags;
@@ -179,6 +183,12 @@ logic crc_append;
 logic crc_good;
 logic crc_restart;
 logic crc_feed;
+logic tx_select;
+logic crc_feed_q;
+logic crc_restart_q;
+logic[7:0] crc_bits_q;
+logic[3:0] crc_len_q;
+logic crc_busy;
 logic crc_event;
 logic[2:0] crc_from;
 logic[4:0] crc_width;
@@ -187,7 +197,6 @@ logic[7:0] crc_bits;
 logic[3:0] crc_len;
 logic[7:0] covered;
 logic[7:0] start_wire;
-logic raw_covered;
 logic rx_bit_feed;
 logic start_feed;
 logic tx_feed;
@@ -319,10 +328,18 @@ always_ff@(posedge clk or negedge rst_n) begin
 		reply_gap <= '0;
 		reply_pattern <= '0;
 		tail_remaining <= '0;
+		crc_feed_q <= 1'b0;
+		crc_restart_q <= 1'b1;
+		crc_bits_q <= '0;
+		crc_len_q <= '0;
 		for (int k = 0; k < blocks; k++) begin
 			block_group[k] <= '0;
 		end
 	end else begin
+		crc_feed_q <= crc_feed;
+		crc_restart_q <= crc_restart;
+		crc_bits_q <= crc_bits;
+		crc_len_q <= crc_len;
 		outstanding <= outstanding + {4'd0, wire_accept} + {4'd0, tail_take} - {4'd0, tx_done} - {4'd0, discard};
 		queued <= queued + {4'd0, wire_accept} - {4'd0, tx_take} - {4'd0, discard};
 		start_prev <= block_success[0];
@@ -597,14 +614,16 @@ end
 
 assign rx_bit_feed = read_tick && ((|(block_listening[blocks-1:1] & covered[blocks-1:1] & field_ok[blocks-1:1])) || (main_listening && !main_writing && covered[7] && !(crc_byte && main_short)));
 assign start_feed = block_success[0] && !start_prev && !block_writing[0] && covered[0] && (block_len[0] != 4'd0) && field_ok[0];
-assign tx_feed = wire_accept && (fifo_din[11:8] != 4'd0) && raw_covered && (!crc_byte || (fifo_din[11:8] == 4'd8));
+assign tx_select = ((|block_push) || main_valid) && tx_raw[12] && (tx_raw[11:8] != 4'd0) && tx_covered && (!crc_byte || (tx_raw[11:8] == 4'd8));
+assign tx_feed = tx_select && wire_accept;
 assign crc_feed = tx_feed || start_feed || rx_bit_feed;
+assign crc_busy = crc_feed_q || crc_restart_q;
 assign crc_restart = !block_success[0] && !crc_span;
 
 always_comb begin
-	if (tx_feed) begin
-		crc_bits = fifo_din[7:0];
-		crc_len = fifo_din[11:8];
+	if (tx_select) begin
+		crc_bits = tx_data;
+		crc_len = tx_raw[11:8];
 	end else if (start_feed) begin
 		crc_bits = start_wire;
 		crc_len = block_len[0];
@@ -622,10 +641,10 @@ crc_unit crc_block (
 	.cfg_rule(cfg_main_cycles[7:0]),
 	.cfg_high(cfg_cycles),
 	.cfg_low(cfg_compare),
-	.restart(crc_restart),
-	.feed(crc_feed),
-	.feed_bits(crc_bits),
-	.feed_len(crc_len),
+	.restart(crc_restart_q),
+	.feed(crc_feed_q),
+	.feed_bits(crc_bits_q),
+	.feed_len(crc_len_q),
 	.enabled(crc_on),
 	.check(crc_check),
 	.append(crc_append),
@@ -661,11 +680,11 @@ assign tail_active = |tail_remaining;
 assign tail_start = main_done_raw && (|tail_need) && !tail_active;
 assign tail_step = tail_remaining & (~tail_remaining + 6'd1);
 assign tail_wire = (tail_step != 6'b000001);
-assign tail_push = tail_active && !tail_wire && !(|block_push) && !main_valid && !sr_accept && !out_full && space && !(abort && !branch_abort) && !halt;
-assign tail_valid = tail_active && tail_wire && !tail_skip && (queued == 5'd0) && !(|block_push) && !main_valid && !sr_accept && !abort && !halt && !internal_cancel;
+assign tail_push = tail_active && !crc_busy && !tail_wire && !(|block_push) && !main_valid && !sr_accept && !out_full && space && !(abort && !branch_abort) && !halt;
+assign tail_valid = tail_active && !crc_busy && tail_wire && !tail_skip && (queued == 5'd0) && !(|block_push) && !main_valid && !sr_accept && !abort && !halt && !internal_cancel;
 assign tail_take = tail_valid && tail_ready;
 assign tail_advance = tail_push || tail_take;
-assign tail_skip = tail_active && (tail_step == 6'b001000) && !reply_fire && !abort && !halt;
+assign tail_skip = tail_active && !crc_busy && (tail_step == 6'b001000) && !reply_fire && !abort && !halt;
 assign tail_done = (tail_advance && ((tail_remaining & ~tail_step) == 6'd0)) || tail_skip;
 assign crc_event = tail_push && (tail_step == 6'b000001);
 
@@ -706,7 +725,6 @@ watchdog dog (
 always_comb begin
 	fifo_wr = 1'b0;
 	fifo_raw = '0;
-	raw_covered = 1'b0;
 	if (tail_push) begin
 		fifo_wr = 1'b1;
 		fifo_raw = tail_entry;
@@ -722,15 +740,28 @@ always_comb begin
 	if (main_valid) begin
 		fifo_wr = 1'b1;
 		fifo_raw = {main_wire, main_len, main_data};
-		raw_covered = covered[7];
 	end
 	for (int j = blocks - 1; j >= 0; j--) begin
 		if (block_push[j]) begin
 			fifo_wr = 1'b1;
 			fifo_raw = {block_writing[j], block_len[j], block_value[j]};
-			raw_covered = covered[j];
 		end
 	end
+end
+
+always_comb begin
+	tx_raw = {main_wire, main_len, main_data};
+	tx_covered = covered[7];
+	for (int j = blocks - 1; j >= 0; j--) begin
+		if (block_push[j]) begin
+			tx_raw = {block_writing[j], block_len[j], block_value[j]};
+			tx_covered = covered[j];
+		end
+	end
+	for (int r = 0; r < 8; r++) begin
+		tx_flipped[r] = tx_raw[7 - r];
+	end
+	tx_data = msb ? (tx_flipped >> (4'd8 - tx_raw[11:8])) : tx_raw[7:0];
 end
 
 always_comb begin

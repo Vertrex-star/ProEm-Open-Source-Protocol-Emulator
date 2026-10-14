@@ -157,28 +157,29 @@ lines (I2C, USB) work on a single pad. A channel only drives its pads when `OUT`
 The GDS file, pictures of the layout and a summary of space, power, performance and the Jane Street
 challenge are in [gds/](gds/README.md).
 
-Hardened locally on 13 October 2026 (ISA v0.7.1) with the same flow the `gds` workflow uses
+Hardened locally on 14 October 2026 (ISA v0.7.1) with the same flow the `gds` workflow uses
 (template branch `cmos5l`, LibreLane 3.1.0.dev3, IHP-Open-PDK at the commit the workflow
-installs), at the 6 × 4 tiles the Jane Street challenge sets:
+installs), at the 6 × 4 tiles the Jane Street challenge sets. The GDS and LEF in [gds/](gds/README.md)
+are this layout.
 
 | | |
 | --- | --- |
 | Process | IHP SG13CMOS5L 130 nm |
 | Tiles | 6 × 4, 1289.28 × 710.64 µm |
-| Cells | 19,077 after synthesis; 25,606 after place and route, not counting fill (includes 6,064 timing repair buffers and 358 clock tree cells) |
-| Utilisation | 42 % of the core area |
+| Cells | 18,969 after synthesis; 25,612 after place and route, not counting fill (includes 6,104 timing repair buffers and 362 clock tree cells) |
+| Utilisation | 43 % of the core area |
 | Routing | 0 violations after detailed routing, 0 antenna violations |
 | Sign-off checks | Magic DRC 0 errors, LVS clean, no illegal overlaps; cocotb gate-level tests pass on the routed netlist |
-| Setup slack at 50 MHz | 5.0 ns typical (the sign-off corner), −3.8 ns slow (1.08 V, 125 °C), 10.1 ns fast |
-| Hold slack | 0.29 ns typical, 0.60 ns slow, 0.11 ns fast |
-| Maximum clock | 66 MHz typical, 42 MHz at the slow corner |
-| Power | about 9.9 mW at 50 MHz (7.9 to 12.3 mW across corners) |
+| Setup slack at 50 MHz | 9.8 ns typical, 3.8 ns slow (1.08 V, 125 °C), 12.4 ns fast |
+| Hold slack | 0.29 ns typical, 0.61 ns slow, 0.10 ns fast |
+| Maximum clock | 98 MHz typical, 62 MHz at the slow corner |
+| Power | about 10.2 mW at 50 MHz (8.1 to 12.7 mW across corners) |
 
-The CMOS5L flow only checks timing at the typical corner, which passes with a third of the
-period to spare. The slow corner, met by the September layout, now misses by 3.8 ns on one path
-added with the CRC unit: from a frame's `in_frame` flag through the branch rules and the cancel
-decision into the CRC update. See [docs/verification_report.pdf](docs/verification_report.pdf).
-The picture and the files in [gds/](gds/README.md) are from the September layout (ISA v0.5).
+The CMOS5L flow only checks timing at the typical corner; this layout meets all three. The
+first v0.7.1 layout missed the slow corner by 3.8 ns; the changes that closed it (a registered
+CRC input, a faster CRC update, registered FIFO and buffer state, and setup repair after global
+routing in `src/config.json`) are described in
+[docs/verification_report.pdf](docs/verification_report.pdf).
 
 ## Running the tests
 
@@ -253,8 +254,8 @@ python docs/diagram/make_diagram.py      # writes docs/protocol_emulator_archite
 
 ## Status and limits
 
-All tests pass, and the design places, routes and meets timing at the sign-off corner on
-6 × 4 Tiny Tapeout tiles on the CMOS5L template (the slow corner misses by 3.8 ns, see Layout).
+All tests pass, and the design places, routes and meets timing at every corner on 6 × 4 Tiny
+Tapeout tiles on the CMOS5L template.
 Known limits are listed in the design reference; the main ones are the return link bandwidth
 (full-size Ethernet frames overflow and are reported), the instruction link rate when feeding
 fast fixed-timing lines. Still to do:

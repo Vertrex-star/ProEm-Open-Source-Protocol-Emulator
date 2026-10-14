@@ -29,14 +29,14 @@
 
 \title{ProEm: Verification Report\\\large Design frozen at ISA v0.7.1}
 \author{Paul Vincent Bezzina}
-\date{13 October 2026}
+\date{14 October 2026}
 
 \begin{document}
 \maketitle
 \thispagestyle{fancy}
 
 \begin{abstract}
-The architecture is frozen at ISA v0.7. This report covers the checks run on that design before hardening: lint, synthesis and a full place and route with the Tiny Tapeout CMOS5L flow, gate-level simulation, a second simulator, an independent decode of the standards waveforms with sigrok, line coverage, and a formal proof of the line codec's entry accounting. Two real bugs came out of it, both in the line codec, both fixed with small local changes; nothing in the instruction set changed. The design is released as v0.7.1. The layout closes timing at the sign-off (typical) corner with 5.0\,ns to spare, but no longer at the slow corner, which earlier layouts met; Section~\ref{sec:pnr} has the path. What is left is the GitHub run of the same flow and real hardware.
+The architecture is frozen at ISA v0.7. This report covers the checks run on that design before hardening: lint, synthesis and a full place and route with the Tiny Tapeout CMOS5L flow, gate-level simulation, a second simulator, an independent decode of the standards waveforms with sigrok, line coverage, and a formal proof of the line codec's entry accounting. Two real bugs came out of it, both in the line codec, both fixed with small local changes; nothing in the instruction set changed. The design is released as v0.7.1. The first layout missed the slow corner by 3.8\,ns; after a set of local timing changes (Section~\ref{sec:pnr}) the layout meets every corner, with 3.8\,ns to spare at the slow one and 9.8\,ns at typical. What is left is the GitHub run of the same flow and real hardware.
 \end{abstract}
 
 \section{Summary}
@@ -48,8 +48,8 @@ Check & What was run & Result \\
 \midrule
 Freeze & v0.7 tagged as the baseline; the pulse-width work started on top of it was discarded & done \\
 Lint & Verilator 5.020 \sig{-Wall} on the whole design; 26 warnings, each reviewed; 13 waivers recorded in \sig{lint/waivers.vlt} & \pass \\
-Synthesis & Yosys and ABC to \sig{sg13cmos5l} cells, typical and slow corners (\sig{scripts/synth\_ihp.sh}) & 35\,\% of the 6x4 tile \\
-Place and route & LibreLane 3.1 with the Tiny Tapeout CMOS5L configuration, 6x4 tiles, 50\,MHz & typical \pass, slow $-$3.8\,ns \\
+Synthesis & Yosys and ABC to \sig{sg13cmos5l} cells, typical and slow corners (\sig{scripts/synth\_ihp.sh}) & 36\,\% of the 6x4 tile \\
+Place and route & LibreLane 3.1 with the Tiny Tapeout CMOS5L configuration, 6x4 tiles, 50\,MHz & \pass{} at all three corners \\
 Gate level & The cocotb suite on the synthesised and on the routed netlist, with the IHP cell models (Icarus) & \pass{} 6/6, both \\
 Second simulator & Every pin-level test rebuilt on Verilator instead of CXXRTL & \pass{} \\
 Independent decode & 30 waveforms from the standards tests decoded by sigrok's protocol decoders (\sig{scripts/sigrok\_check.py}) & \pass{} 30/30 \\
@@ -113,22 +113,22 @@ The inputs are synchronised before use: the eight pins through three flip-flops 
 Measure & Value \\
 \midrule
 Standard cells & 19\,721 \\
-of which flip-flops (\sig{dfrbpq\_1}) & 2\,666 \\
-Cell area & 323\,385\,\textmu m$^2$ \\
+of which flip-flops (\sig{dfrbpq\_1}) & 2\,764 \\
+Cell area & 333\,138\,\textmu m$^2$ \\
 6x4 tile (1289.28 $\times$ 710.64\,\textmu m) & 916\,214\,\textmu m$^2$ \\
-Utilisation before placement & 35\,\% \\
-Longest register-to-register logic, typical 1.20\,V 25\,\textdegree C & 3.8\,ns \\
-Same, slow 1.08\,V 125\,\textdegree C & 5.9\,ns \\
+Utilisation before placement & 36\,\% \\
+Longest register-to-register logic, typical 1.20\,V 25\,\textdegree C & 3.2\,ns \\
+Same, slow 1.08\,V 125\,\textdegree C & 5.1\,ns \\
 Clock period (50\,MHz) & 20\,ns \\
 \bottomrule
 \end{tabularx}
 \end{center}
 
-The delays are ABC's estimate with no wires and ideal fanout, and the routed design in Section~\ref{sec:pnr} shows how optimistic that is: the real worst path is about 15\,ns at the typical corner and 23.8\,ns at the slow one. Use the script for area and for comparing two versions of the RTL, not for sign-off. The 35\,\% utilisation leaves room for the buffers, clock tree and fillers the flow adds (42\,\% after routing); earlier documents quoted a cell budget from generic synthesis, and these figures replace it.
+The delays are ABC's estimate with no wires and ideal fanout, and the routed design shows how optimistic that is: in the first layout of v0.7.1 the real worst path was about 15\,ns at the typical corner and 23.8\,ns at the slow one. Use the script for area and for comparing two versions of the RTL, not for sign-off. The 36\,\% utilisation leaves room for the buffers, clock tree and fillers the flow adds (43\,\% after routing); earlier documents quoted a cell budget from generic synthesis, and these figures replace it.
 
 \section{Place and route}\label{sec:pnr}
 
-The design was hardened locally with the flow the \sig{gds} workflow runs: LibreLane 3.1.0.dev3, the template's \sig{src/config.json}, IHP-Open-PDK \texttt{2bbec755}, 6x4 tiles, a 20\,ns clock. It completed with the results below. The flow only fails on timing at the typical corner; the other two corners are reported for information.
+The design was hardened locally with the flow the \sig{gds} workflow runs: LibreLane 3.1.0.dev3, the template's \sig{src/config.json}, IHP-Open-PDK \texttt{2bbec755}, 6x4 tiles, a 20\,ns clock. The flow only fails on timing at the typical corner, but this layout meets all three.
 
 \begin{center}
 \begin{tabularx}{\linewidth}{@{}L r r r@{}}
@@ -136,10 +136,11 @@ The design was hardened locally with the flow the \sig{gds} workflow runs: Libre
  & Typical & Slow & Fast \\
  & 1.20\,V, 25\,\textdegree C & 1.08\,V, 125\,\textdegree C & 1.32\,V, $-$40\,\textdegree C \\
 \midrule
-Setup slack & +4.98\,ns & $-$3.78\,ns & +10.12\,ns \\
-Hold slack & +0.29\,ns & +0.60\,ns & +0.11\,ns \\
-Highest clock & 66\,MHz & 42\,MHz & 101\,MHz \\
-Power at 50\,MHz & 9.9\,mW & 7.9\,mW & 12.3\,mW \\
+Setup slack & +9.82\,ns & +3.84\,ns & +12.35\,ns \\
+Hold slack & +0.29\,ns & +0.61\,ns & +0.10\,ns \\
+Recovery and removal slack & +11.6 / +0.93\,ns & +9.2 / +1.69\,ns & +13.2 / +0.48\,ns \\
+Highest clock & 98\,MHz & 62\,MHz & 131\,MHz \\
+Power at 50\,MHz & 10.2\,mW & 8.1\,mW & 12.7\,mW \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -149,26 +150,43 @@ Power at 50\,MHz & 9.9\,mW & 7.9\,mW & 12.3\,mW \\
 \toprule
 Measure & Value \\
 \midrule
-Cells after LibreLane synthesis & 19\,077 \\
-Cells after place and route, without fill & 25\,606 \\
-of which flip-flops & 2\,665 \\
-of which timing repair buffers & 6\,064 \\
-of which clock tree buffers and inverters & 358 \\
-Utilisation of the core & 42\,\% \\
+Cells after LibreLane synthesis & 18\,969 \\
+Cells after place and route, without fill & 25\,612 \\
+of which flip-flops & 2\,763 \\
+of which timing repair buffers & 6\,104 \\
+of which clock tree buffers and inverters & 362 \\
+Utilisation of the core & 43\,\% \\
 Detailed routing violations & 0 \\
-Antenna violations & 0 (35 diodes) \\
-Wire length & 1.08\,m \\
+Antenna violations & 0 (51 diodes) \\
+Wire length & 1.15\,m \\
 Magic DRC & 0 errors \\
 LVS & clean \\
 \bottomrule
 \end{tabularx}
 \end{center}
 
-\paragraph{The slow corner.} The layout of 28 September (ISA v0.5) met all three corners, with 2.6\,ns to spare at the slow one. Since then the CRC unit, the reply and the v0.7 features have added logic to one path: from a chain's \sig{in\_frame} flag, through the branch rules to the cancel decision (\sig{cancel\_now}), then through the CRC restart and the 8-bit-per-clock CRC update into the CRC register. All 32 failing paths are this path in one of the two channels. At typical conditions the chip runs to about 66\,MHz, so 50\,MHz has a 33\,\% margin; at 1.08\,V and 125\,\textdegree C together it would need a clock of 42\,MHz or less. Registering the cancel decision before it reaches the CRC unit would cut the path in two; it costs one clock of latency on an abort and is the obvious change if the slow corner matters.
+\subsection{Closing the slow corner}
+
+The first layout of v0.7.1 met the typical corner with 5.0\,ns to spare but missed the slow corner (1.08\,V, 125\,\textdegree C) by 3.8\,ns, where the September layout (ISA v0.5) had met it. The CRC unit, the reply and the v0.7 features had lengthened the paths that end in the CRC register and in the frame buffer. Three rounds of changes later the slow corner has 3.8\,ns to spare. Each change keeps the behaviour seen at the pins; all tests and all six proofs pass after each one.
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}L r@{}}
+\toprule
+Change & Slow slack after \\
+\midrule
+Start: the path from \sig{in\_frame} through the branch rules and the abort decision into the 8-bit-per-clock CRC update & $-$3.78\,ns \\
+The CRC unit's input is registered, so it updates one clock after the bits are fed; the tail (CRC append, CRC result, reply) waits for that clock. The CRC data no longer passes through the abort logic & $-$1.06\,ns \\
+MAIN keeps the bits left in a register instead of subtracting the count every clock; the host FIFO's head entry is registered; the frame buffer keeps its fill level in a register and writes its memory one clock later, with a bypass on the read side; the flow repairs setup again after global routing, with 3\,ns margins (\sig{src/config.json}) & $-$0.88\,ns \\
+The CRC update steps through all 8 bits and picks the length once at the end, instead of a multiplexer at every bit; the polynomial is shifted into place when it is written, not every clock; the channel's send multiplexer is selected by the normal queue's valid signal instead of the late tail signal & +3.84\,ns \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+The one visible effect is that a CRC result, a CRC append or a reply now starts one system clock (20\,ns) later after the last bit of a frame. Every standard in the guide, including the USB handshake and the CAN acknowledge slot, still lands where it should.
 
 \section{Gate-level simulation}
 
-The cocotb suite (\sig{test/test.py}) was run against the synthesised netlist with \sig{GATES=yes}, using \sig{sg13cmos5l\_stdcell.v} with \sig{FUNCTIONAL}: autobaud and errors, UART loopback, SPI loopback, I\textsuperscript{2}C target loopback, UART at 0x0000 and the CRC append and check. All 6 pass, on the netlist from \sig{synth\_ihp.sh} and again on the routed netlist from Section~\ref{sec:pnr} (with its 6\,064 repair buffers, 123 hold buffers and clock tree). The \sig{gl\_test} job in the \sig{gds} workflow repeats the second run on GitHub.
+The cocotb suite (\sig{test/test.py}) was run against the synthesised netlist with \sig{GATES=yes}, using \sig{sg13cmos5l\_stdcell.v} with \sig{FUNCTIONAL}: autobaud and errors, UART loopback, SPI loopback, I\textsuperscript{2}C target loopback, UART at 0x0000 and the CRC append and check. All 6 pass, on the netlist from \sig{synth\_ihp.sh} and again on the routed netlist from Section~\ref{sec:pnr} (with its 6\,104 repair buffers and clock tree). The \sig{gl\_test} job in the \sig{gds} workflow repeats the second run on GitHub.
 
 \section{A second simulator}
 
@@ -227,7 +245,6 @@ None of them changes how the chip behaves for a standard in the guide. The first
 
 \begin{itemize}
 \item \textbf{The GitHub run.} Push and let the \sig{gds} workflow repeat the hardening above and run the Tiny Tapeout precheck, which includes the full KLayout CMOS5L DRC that the local run skips.
-\item \textbf{The slow corner} (Section~\ref{sec:pnr}), if the chip has to run at 50\,MHz hot and at low supply.
 \item \textbf{Routed gate level.} The \sig{gl\_test} job runs the cocotb suite on the routed netlist. It should match the result above.
 \item \textbf{Hardware.} An FPGA build against real parts (an I\textsuperscript{2}C sensor, a CAN transceiver, a USB-UART adapter), with a logic analyser running the same sigrok decoders as \sig{sigrok\_check.py}.
 \item \textbf{Limits that stay.} A generated clock needs \sig{DIV} $\ge$ 4 (as the ISA says), because input pins arrive three clocks late. \sig{t\_modes} runs at 3 to show the margin; at 2, CPHA 1 reads fail as expected.

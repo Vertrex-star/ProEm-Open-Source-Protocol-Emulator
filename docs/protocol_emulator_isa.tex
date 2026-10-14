@@ -35,7 +35,7 @@
 
 \title{ProEm Instruction Set\\\large Draft v0.7.1}
 \author{Paul Vincent Bezzina}
-\date{13 October 2026}
+\date{14 October 2026}
 
 \begin{document}
 \maketitle
@@ -758,10 +758,11 @@ A lost arbitration stops the chip driving within the same bit and reports \textt
 
 \section{Corrections in v0.7.1}
 
-No instruction changes; two behaviours now match what this document already describes.
+No instruction changes. Two behaviours now match what this document already describes, and one timing detail changed to close timing at the slow corner.
 \begin{itemize}
 \item \sig{CLOCK} GENERATE with an \sig{EDGE} that samples on the trailing edge (SPI modes 1 and 3): the data output now changes on the leading edge, half a clock period before the device samples, instead of on the trailing edge itself. Modes 0 and 2 and I\textsuperscript{2}C are unchanged.
 \item A frame abort that cancels queued bits (\sig{BRANCH} abort, underrun, I\textsuperscript{2}C target abort) can no longer lose a bit-done report when a second cancel or the next frame follows within two clocks. Before, the channel could stop listening until \sig{CLEAR}.
+\item Timing: the CRC unit now updates one system clock after the bits it is fed, so the CRC result entry, an appended CRC and a reply start one clock (20\,ns) later after the last bit of a frame. Reply gaps and acknowledge slots are counted in bit times, so no standard in the guide is affected.
 \end{itemize}
 
 \section{Changes in v0.7}

@@ -35,12 +35,12 @@ module crc_unit (
 );
 
 logic[15:0] crc;
-logic[15:0] poly;
 logic[15:0] residue;
 logic[15:0] polyAligned;
 logic[15:0] initAligned;
 logic[15:0] residueAligned;
 logic[15:0] stepped;
+logic[15:0] steps [0:8];
 logic[3:0] widthLess;
 logic[3:0] shift;
 logic[2:0] coverFrom;
@@ -55,25 +55,23 @@ logic feedback;
 logic reload;
 
 assign shift = 4'd15 - widthLess;
-assign polyAligned = poly << shift;
 assign initAligned = initOnes ? (16'hFFFF << shift) : 16'h0000;
 assign residueAligned = residue << shift;
 
 always_comb begin
-	stepped = crc;
+	steps[0] = crc;
 	feedback = 1'b0;
 	for (int i = 0; i < 8; i++) begin
-		if (i < feed_len) begin
-			feedback = stepped[15] ^ feed_bits[i];
-			stepped = {stepped[14:0], 1'b0} ^ (feedback ? polyAligned : 16'h0000);
-		end
+		feedback = steps[i][15] ^ feed_bits[i];
+		steps[i + 1] = {steps[i][14:0], 1'b0} ^ (feedback ? polyAligned : 16'h0000);
 	end
+	stepped = (feed_len >= 4'd8) ? steps[8] : steps[{1'b0, feed_len[2:0]}];
 end
 
 always_ff@(posedge clk or negedge rst_n) begin
 	if (!rst_n) begin
 		crc <= '0;
-		poly <= '0;
+		polyAligned <= '0;
 		residue <= '0;
 		widthLess <= 4'd15;
 		coverFrom <= 3'd7;
@@ -91,7 +89,7 @@ always_ff@(posedge clk or negedge rst_n) begin
 			widthLess <= cfg_rule[7:4];
 			coverFrom <= cfg_rule[3:1];
 			initOnes <= cfg_rule[0];
-			poly <= {cfg_high, cfg_low};
+			polyAligned <= {cfg_high, cfg_low} << (4'd15 - cfg_rule[7:4]);
 		end
 		if (cfg_we && cfg_sel == 4'd11) begin
 			crcOn <= cfg_rule[7];

@@ -248,7 +248,7 @@ entry_dispatch dispatch (
 assign tx_ready = send_ready && !tail_valid;
 assign tx_take = tx_valid && tx_ready;
 assign send_valid = tx_valid || tail_valid;
-assign send_len = tail_valid ? tail_len : tx_len;
-assign send_data = tail_valid ? tail_data : tx_data;
+assign send_len = tx_valid ? tx_len : tail_len;
+assign send_data = tx_valid ? tx_data : tail_data;
 
 endmodule

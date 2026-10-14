@@ -46,7 +46,6 @@ module main_counter (
 );
 
 logic[15:0] internal_clock;
-logic[15:0] counter;
 logic[15:0] remaining;
 logic[7:0] shift_data;
 logic[7:0] next_shift;
@@ -93,14 +92,13 @@ logic ack_seen;
 assign write_mode = internal_follow ? follow_write : internal_write;
 assign next_shift = msb ? {shift_data[6:0], input_bit} : {input_bit, shift_data[7:1]};
 assign read_tick = !write_mode && enable && tick && !ack_pending;
-assign finishing = read_tick && !internal_wait_end && (counter + 1'b1 == internal_clock);
+assign finishing = read_tick && !internal_wait_end && (remaining == 16'd1);
 assign end_finish = !write_mode && enable && internal_wait_end && end_success;
 assign release_data = pending_valid && fifo_free;
 assign ack_push = ack_pending && !pending_valid && fifo_free;
 
 assign current_data = carry_valid ? carry_data : host_data;
 assign current_len = carry_valid ? carry_len : host_len;
-assign remaining = internal_clock - counter;
 assign byte_room = 4'd8 - byte_bits;
 assign limit = (!internal_ack || {12'd0, byte_room} > remaining) ? ((remaining > 16'd8) ? 4'd8 : remaining[3:0]) : byte_room;
 assign take = (current_len > limit) ? limit : current_len;
@@ -124,7 +122,7 @@ always_ff@(posedge clk or negedge rst_n) begin
 		internal_write <= 1'b0;
 		internal_follow <= 1'b0;
 		internal_ack <= 1'b0;
-		counter <= '0;
+		remaining <= '0;
 		shift_data <= '0;
 		pending_data <= '0;
 		pending_len <= '0;
@@ -155,7 +153,7 @@ always_ff@(posedge clk or negedge rst_n) begin
 			internal_write <= write_config;
 			internal_follow <= follow_config;
 			internal_ack <= ack_config;
-			counter <= '0;
+			remaining <= clock_cycles;
 			shift_data <= '0;
 			byte_bits <= '0;
 			index <= '0;
@@ -170,7 +168,7 @@ always_ff@(posedge clk or negedge rst_n) begin
 				ack_pending <= 1'b0;
 				nack_pending <= 1'b0;
 			end
-			counter <= '0;
+			remaining <= internal_clock;
 			shift_data <= '0;
 			byte_bits <= '0;
 			index <= '0;
@@ -184,7 +182,7 @@ always_ff@(posedge clk or negedge rst_n) begin
 				end else begin
 					carry_valid <= 1'b0;
 				end
-				counter <= write_last ? 16'd0 : counter + take;
+				remaining <= write_last ? internal_clock : remaining - {12'd0, take};
 				byte_bits <= (write_byte_end || write_last) ? 4'd0 : byte_bits + take;
 				if (internal_ack && (write_byte_end || write_last)) begin
 					ack_wait <= 1'b1;
@@ -207,13 +205,13 @@ always_ff@(posedge clk or negedge rst_n) begin
 				end
 			end
 			if (finishing) begin
-				counter <= '0;
+				remaining <= internal_clock;
 				shift_data <= '0;
 				index <= '0;
 			end else begin
 				shift_data <= next_shift;
 				index <= index + 1'b1;
-				counter <= counter + 1'b1;
+				remaining <= remaining - 1'b1;
 			end
 		end
 	end
