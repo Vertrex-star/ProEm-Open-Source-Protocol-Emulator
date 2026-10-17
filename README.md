@@ -8,7 +8,7 @@ Target: IHP SG13CMOS5L 130 nm through [Tiny Tapeout](https://tinytapeout.com) (6
 Top module for Tiny Tapeout: `tt_um_vertrex_star_proem`.
 Built for the [Jane Street protocol emulator ASIC competition](https://blog.janestreet.com/protocol-emulator-asic-competition/).
 
-![Architecture](docs/protocol_emulator_architecture.png)
+![Architecture](docs/images/protocol_emulator_architecture.png)
 
 ## At a glance
 
@@ -96,10 +96,12 @@ host/               Python host library (proem_host.py) and how to drive the chi
 formal/             formal proofs (SymbiYosys): harnesses and .sby files
 lint/               waivers.vlt, the reviewed Verilator warnings
 scripts/            run.sh (all tests + synthesis), lint.sh, coverage.sh, sigrok_check.py,
-                    formal.sh (all proofs), synth_ihp.sh (IHP area), sta.sh (timing estimate)
+                    formal.sh (all proofs), synth_ihp.sh (IHP area), sta.sh (timing estimate),
+                    docs.sh (build the PDFs)
 gds/                the layout (GDS, LEF), layout images and a results summary
-docs/               every document as PDF + LaTeX (README.md lists them), architecture diagram,
-                    info.md (datasheet page), layout renders
+docs/               every document as a PDF (README.md lists them), info.md (datasheet page)
+  latex/            the LaTeX source of each PDF (build with scripts/docs.sh)
+  images/           architecture diagram and layout picture
   diagram/          diagram generator (make_diagram.py) and its fonts (SIL OFL)
 .github/workflows/  gds (Tiny Tapeout GDS, precheck, gate-level test, viewer), test (cocotb),
                     docs (datasheet check), sim (every pin-level test, sigrok, lint), formal (every proof)
@@ -157,7 +159,7 @@ lines (I2C, USB) work on a single pad. A channel only drives its pads when `OUT`
 
 ### Layout
 
-![Layout](docs/layout_full.png)
+![Layout](docs/images/layout_full.png)
 
 The GDS file, pictures of the layout and a summary of space, power, performance and the Jane Street
 challenge are in [gds/](gds/README.md).
@@ -250,11 +252,12 @@ PDK_ROOT=path/to/IHP-Open-PDK bash scripts/synth_ihp.sh typ_1p20V_25C   # area a
 [docs/verification_report.pdf](docs/verification_report.pdf) gives the results and the two
 bugs they found.
 
-## Regenerating the diagram
+## Regenerating the diagram and the PDFs
 
 ```sh
 pip install playwright && python -m playwright install chromium
-python docs/diagram/make_diagram.py      # writes docs/protocol_emulator_architecture.png
+python docs/diagram/make_diagram.py      # writes docs/images/protocol_emulator_architecture.png
+bash scripts/docs.sh                     # rebuilds every PDF in docs/ (needs pdflatex)
 ```
 
 ## Status and limits

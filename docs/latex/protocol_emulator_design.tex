@@ -74,7 +74,7 @@ The two channels run at the same time. That is how the chip does SPI full duplex
 \begin{landscape}
 \begin{figure}[p]
 \centering
-\includegraphics[width=\linewidth,height=0.9\textheight,keepaspectratio]{protocol_emulator_architecture.png}
+\includegraphics[width=\linewidth,height=0.9\textheight,keepaspectratio]{../images/protocol_emulator_architecture.png}
 \caption{The whole chip. Channel A is shown in full; channel B is an identical copy.}
 \label{fig:arch}
 \end{figure}
@@ -457,7 +457,7 @@ Fast, 1.32\,V, $-40\,^\circ$C & 12.35\,ns & 0.10\,ns & 131\,MHz & 12.7\,mW \\
 The CMOS5L flow only enforces timing at the typical corner, so \sig{src/config.json} adds three settings to make the slow corner pass as well: a 0.75\,ns limit on signal transitions, 3\,ns resizer setup margins, and a second setup repair after global routing. The first layout of v0.7.1 still missed the slow corner by 3.8\,ns, on paths ending in the CRC register and the frame buffer. Four RTL changes closed it without changing what the pins do, apart from the CRC and reply starting one clock later: the CRC input is registered; MAIN keeps the bits left in a register; the host FIFO head and the frame buffer's fill level are registered, and the buffer writes its memory one clock later with a bypass; and the CRC update picks its length once, after all 8 steps. The verification report gives the slack after each step. Most of the power is the clock reaching the 2,763 flip-flops.
 
 \begin{center}
-\includegraphics[width=\linewidth]{layout_full.png}\\[2pt]
+\includegraphics[width=\linewidth]{../images/layout_full.png}\\[2pt]
 {\small Routed layout, 6 $\times$ 4 tiles. Cells cover 43\,\% of the core; the rest is filler and decoupling cells.}
 \end{center}
 
@@ -515,10 +515,10 @@ Folder or file & Content \\
 \sig{sim/verilator/} & Adapter that runs the same tests on a Verilator model, for coverage \\
 \sig{formal/} & Formal harnesses and \sig{.sby} files for six modules \\
 \sig{lint/} & \sig{waivers.vlt}, the reviewed Verilator warnings \\
-\sig{scripts/} & \sig{run.sh} (every test, then synthesis), \sig{lint.sh}, \sig{coverage.sh}, \sig{sigrok\_check.py}, \sig{formal.sh}, \sig{synth\_ihp.sh} (IHP cell count and area), \sig{sta.sh} (timing estimate) \\
+\sig{scripts/} & \sig{run.sh} (every test, then synthesis), \sig{lint.sh}, \sig{coverage.sh}, \sig{sigrok\_check.py}, \sig{formal.sh}, \sig{synth\_ihp.sh} (IHP cell count and area), \sig{sta.sh} (timing estimate), \sig{docs.sh} (builds these PDFs) \\
 \sig{host/} & Python host library and its README \\
 \sig{gds/} & The routed layout (GDS, LEF), pictures and a results summary \\
-\sig{docs/} & This document, the ISA, the module references, the standards guide, the toolchain guide, the verification report, the diagram and its generator; \sig{docs/README.md} lists them \\
+\sig{docs/} & This document, the ISA, the module references, the standards guide, the toolchain guide and the verification report as PDFs, with their LaTeX in \sig{docs/latex/}, pictures in \sig{docs/images/} and the diagram generator in \sig{docs/diagram/}; \sig{docs/README.md} lists them \\
 \bottomrule
 \end{tabularx}
 \end{center}

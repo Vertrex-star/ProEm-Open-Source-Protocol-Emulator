@@ -192,5 +192,5 @@ with sync_playwright() as pw:
     pg.set_content('<html><body style="margin:0">'+svg+'</body></html>')
     pg.evaluate("document.fonts.ready")
     pg.wait_for_timeout(800)
-    pg.screenshot(path=os.path.join(HERE,"..","protocol_emulator_architecture.png"),clip={"x":0,"y":0,"width":W,"height":H})
+    pg.screenshot(path=os.path.join(HERE,"..","images","protocol_emulator_architecture.png"),clip={"x":0,"y":0,"width":W,"height":H})
     b.close()
