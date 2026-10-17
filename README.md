@@ -44,7 +44,8 @@ Built for the [Jane Street protocol emulator ASIC competition](https://blog.jane
 
 The [design reference](docs/protocol_emulator_design.pdf) explains every block and gives the exact
 instruction bytes for each standard. The line codec, the most involved block, has its own
-walk-through: [docs/line_codec.pdf](docs/line_codec.pdf). The
+walk-through: [docs/line_codec.pdf](docs/line_codec.pdf), and so does the branch unit, which lets a
+frame change direction or abort itself: [docs/branch_unit.pdf](docs/branch_unit.pdf). The
 [standards programming guide](docs/standards_guide.pdf) gives tested receive and transmit
 programs for sixteen more standards.
 
