@@ -102,9 +102,9 @@ File or folder & What it is for \\
 \file{sim/} & The C++ pin-level test suite: 16 test programs plus the shared \file{bench.h}, and \file{sim/verilator/} which lets the same tests run on Verilator. Section~\ref{sec:cxxrtl}. \\
 \file{formal/} & The formal proofs: one harness and one \file{.sby} file per module. Part~\ref{part:formal}. \\
 \file{lint/waivers.vlt} & The reviewed Verilator warnings. Section~\ref{sec:lint}. \\
-\file{scripts/} & \file{run.sh} (C++ suite), \file{lint.sh}, \file{coverage.sh}, \file{sigrok\_check.py}, \file{formal.sh}, \file{synth\_ihp.sh}, \file{sta.sh}. \\
+\file{scripts/} & \file{run.sh} (C++ suite), \file{lint.sh}, \file{coverage.sh}, \file{sigrok\_check.py}, \file{formal.sh}, \file{synth\_ihp.sh}, \file{sta.sh}, \file{docs.sh}. \\
 \file{.github/workflows/} & What GitHub Actions run on every push: \file{gds.yaml}, \file{test.yaml}, \file{sim.yaml}, \file{formal.yaml}, \file{docs.yaml}. Section~\ref{sec:actions}. \\
-\file{docs/} & All documents (\file{docs/README.md} lists them), the datasheet page \file{info.md}, and the diagrams. \\
+\file{docs/} & All documents as PDFs (\file{docs/README.md} lists them) and the datasheet page \file{info.md}; their LaTeX sources are in \file{docs/latex/}, pictures in \file{docs/images/}. \\
 \file{gds/} & A copy of the finished layout (GDS, LEF), images, and a results summary. \\
 \file{host/} & The Python host library (\file{proem\_host.py}) that builds instruction bytes and decodes replies. \\
 \bottomrule
