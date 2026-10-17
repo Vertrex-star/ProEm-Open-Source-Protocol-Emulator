@@ -29,7 +29,7 @@
 
 \title{ProEm: Verification Report\\\large Design frozen at ISA v0.7.1}
 \author{Paul Vincent Bezzina}
-\date{14 October 2026}
+\date{17 October 2026}
 
 \begin{document}
 \maketitle
@@ -101,7 +101,7 @@ The 26 warnings fall into four groups, all harmless:
 \item \sig{UNOPTFLAT} on \sig{start\_router}'s carry vector: a ripple from bit to bit, not a loop. Yosys \sig{check -assert} confirms there is no combinational loop after synthesis.
 \end{itemize}
 
-The inputs are synchronised before use: the eight pins through three flip-flops and the host UART input through three. The one design point worth knowing is that each channel's reset is \sig{rst\_n} AND NOT \sig{clear}, where \sig{clear} is a registered one-clock pulse. It is glitch free and releases just after a clock edge. The routed design's recovery and removal checks pass at every corner (worst recovery slack 9.1\,ns, worst removal slack 0.36\,ns).
+The inputs are synchronised before use: the eight pins through three flip-flops and the host UART input through three. The one design point worth knowing is that each channel's reset is \sig{rst\_n} AND NOT \sig{clear}, where \sig{clear} is a registered one-clock pulse. It is glitch free and releases just after a clock edge. The routed design's recovery and removal checks pass at every corner (worst recovery slack 9.2\,ns, worst removal slack 0.48\,ns).
 
 \section{Synthesis to the IHP cells}
 
@@ -219,10 +219,10 @@ All 30 checks pass. Two decoder quirks needed working around, and neither is a P
 
 \begin{lstlisting}
 bash scripts/coverage.sh
-Total coverage (1310/1327) 98.00%
+Total coverage (1344/1361) 98.00%
 \end{lstlisting}
 
-Of the 17 points never reached, 7 are \sig{default} branches of complete case statements, which cannot be reached. The other 10:
+That is 1,344 of 1,361 points, 98.7\,\% (Verilator rounds the percentage down). Of the 17 points never reached, 7 are \sig{default} branches of complete case statements, which cannot be reached. The other 10:
 \begin{itemize}
 \item the Manchester receive counter saturating at $2^{22}-1$ clocks (more than 84\,ms of idle at 50\,MHz);
 \item a wait entry that starts while a stuff bit is due;

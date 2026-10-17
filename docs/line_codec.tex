@@ -35,7 +35,7 @@
 
 \title{ProEm: The Line Codec\\\large \sig{src/core/line\_codec.sv}}
 \author{Paul Vincent Bezzina}
-\date{13 October 2026}
+\date{17 October 2026}
 
 \begin{document}
 \maketitle
@@ -617,7 +617,7 @@ Entry accounting, cancels, output enables & \sig{formal/line\_codec.sby}: unboun
 \end{tabularx}
 \end{center}
 
-The v0.7 additions are tested in \sig{t\_standards}: the wide divider by RC5 (88\,900 clocks per bit) and the K-Line 5-baud init, \sig{BND} by DALI, release-while-reading by 3-wire SPI and MDIO with checks that the chip and the device never drive at the same time. Not yet exercised by a test: single-ended NRZI (code 1) and Thomas Manchester (code 4). They use the same paths as the tested codes with one gate different. The codec has no formal proof yet; its state space (a 22-bit timer, two counters and the transmit machine) is the next candidate, probably split into a receive proof and a transmit proof.
+The v0.7 additions are tested in \sig{t\_standards}: the wide divider by RC5 (88\,900 clocks per bit) and the K-Line 5-baud init, \sig{BND} by DALI, release-while-reading by 3-wire SPI and MDIO with checks that the chip and the device never drive at the same time. Not yet exercised by a test: single-ended NRZI (code 1) and Thomas Manchester (code 4). They use the same paths as the tested codes with one gate different. The formal proof covers the transmit side's entry accounting and the output enables; the bit-level timing (the 22-bit timer, the Manchester decoder and the unstuffer) is checked by simulation only.
 
 %=====================================================================
 \appendix

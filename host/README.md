@@ -82,6 +82,8 @@ patterns) go in START and the headers, the payload goes through `DATA`, and the 
 `OUT` (I2C STOP, USB end of packet, chip select).
 The ISA document lists complete programs for SPI, I2C (controller and target), USB low speed,
 10BASE-T receive, PS/2, SWD-style and CAN-style arbitration.
+[docs/standards_guide.pdf](../docs/standards_guide.pdf) gives tested programs for sixteen more
+standards, from RS-485 and Modbus RTU to DALI, CAN 2.0B and RC5 infrared.
 
 ## CRC and reply
 

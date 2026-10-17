@@ -26,7 +26,7 @@
 \cfoot{\small\thepage}
 \title{ProEm Standards Programming Guide\\\large Receive and transmit programs for sixteen standards, all tested}
 \author{Paul Vincent Bezzina}
-\date{11 October 2026}
+\date{17 October 2026}
 \begin{document}
 \maketitle
 \thispagestyle{fancy}
@@ -694,5 +694,7 @@ bash scripts/run.sh                 # everything, including t_standards
                                     #   kline kline5 sdi12 smbus mdio sdcard spi3 dali can_ext rc5
 \end{lstlisting}
 Each line of output names the check, shows what was seen on the line or returned by the chip, and ends in PASS or FAIL. The device models live in the test file: a UART decoder working on the recorded line, a LIN master and slave, an ECU, an SDI-12 sensor, an SMBus device that logs every byte, an MDIO PHY, an SD card that verifies the CRC-7, a 3-wire SPI device, a DALI decoder and gear, a CAN node with an independent bit-level checker, and an RC5 receiver output.
+
+\sig{python3 scripts/sigrok\_check.py} decodes the waveforms of these tests a second time with sigrok's protocol decoders, which were written independently of ProEm and of these models, and checks the bytes against values computed separately (30 checks; the verification report gives the details).
 
 \end{document}

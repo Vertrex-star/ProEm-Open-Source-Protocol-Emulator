@@ -16,13 +16,13 @@ Built for the [Jane Street protocol emulator ASIC competition](https://blog.jane
 | --- | --- |
 | Channels | 2 independent channels, A and B, running at the same time |
 | Host link | UART in with auto-baud, UART out at a rate set by `LINK` (down to 4 clocks per bit) |
-| Verified at pin level | UART, SPI (controller and target), I2C controller and target, PS/2, 10BASE-T receive, Manchester transmit, USB low speed receive and transmit with CRC-5/CRC-16 and handshake, SWD-style acknowledge handling, CAN with bit stuffing, arbitration, CRC-15 and acknowledge; plus RS-232/422/485, MIDI, NMEA 0183, PROFIBUS DP, Modbus RTU, DMX512, LIN, K-Line, SDI-12, SMBus/PMBus, MDIO, SD card (SPI), 3-wire SPI, DALI, CAN 2.0B / NMEA 2000, RC5 infrared |
+| Verified at pin level | UART, SPI (controller in all four modes, and target), I2C controller and target, PS/2, 10BASE-T receive, Manchester transmit, USB low speed receive and transmit with CRC-5/CRC-16 and handshake, SWD-style acknowledge handling, CAN with bit stuffing, arbitration, CRC-15 and acknowledge; plus RS-232/422/485, MIDI, NMEA 0183, PROFIBUS DP, Modbus RTU, DMX512, LIN, K-Line, SDI-12, SMBus/PMBus, MDIO, SD card (SPI), 3-wire SPI, DALI, CAN 2.0B / NMEA 2000, RC5 infrared |
 | Reacting on chip | `BRANCH` rules change a frame's direction, or abort it, from a field just received or from the line not reading back what the chip drove |
 | CRC and reply on chip | Any CRC of 1 to 16 bits, checked on receive or appended on transmit; a fixed reply (USB ACK, CAN ACK slot) sent a set number of bits after a good or bad frame |
 | Long packets | `DATA` streams while a frame runs; fixed-timing lines report an underrun if the data runs out |
-| Logic | 18,366 cells after synthesis (ISA v0.7). The last place and route, before the CRC unit, had 15,513 after synthesis and 19,737 after place and route (35 % of the 6 × 4 core area); to be re-hardened |
-| Timing | Closed after routing at all three corners on CMOS5L: 17.4 ns worst path at 1.08 V, 125 °C (20 ns budget) |
-| Instruction set | ISA v0.7, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
+| Logic | 18,969 cells after synthesis, 25,612 after place and route (43 % of the 6 × 4 core area) |
+| Timing | Met after routing at all three corners on CMOS5L: 3.84 ns setup slack at 1.08 V, 125 °C (up to 62 MHz) |
+| Instruction set | ISA v0.7.1, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
 
 ## How it works
 
@@ -71,8 +71,9 @@ import proem_host as ph
 first, rest = ph.uart_tx(0, 115200, b"A0000")   # instruction bytes to send to ui[0]
 ```
 
-New to the toolchain? [docs/beginners_guide.pdf](docs/beginners_guide.pdf) explains YAML, Icarus
-Verilog, cocotb, the C++ tests, the ASIC flow, processes and Tiny Tapeout from the start.
+New to the toolchain? [docs/toolchain_guide.pdf](docs/toolchain_guide.pdf) explains YAML, the C++
+tests, cocotb, lint, coverage, sigrok, formal proofs, the ASIC flow, timing and Tiny Tapeout from
+the start. [docs/README.md](docs/README.md) lists every document.
 
 ## Repository layout
 
@@ -89,16 +90,19 @@ src/
   files.f           file list in compile order
   config.json       LibreLane settings used by the Tiny Tapeout GDS flow
 test/               cocotb test (tb.v, test.py), runs on RTL and on the gate-level netlist
-sim/                pin-level test bench (bench.h) and one test per standard (t_*.cpp)
+sim/                pin-level test bench (bench.h) and the tests (t_*.cpp)
+  verilator/        adapter that runs the same tests on Verilator, for coverage
 host/               Python host library (proem_host.py) and how to drive the chip
 formal/             formal proofs (SymbiYosys): harnesses and .sby files
-scripts/            run.sh (all tests + synthesis), sta.sh (timing check), formal.sh (all proofs)
+lint/               waivers.vlt, the reviewed Verilator warnings
+scripts/            run.sh (all tests + synthesis), lint.sh, coverage.sh, sigrok_check.py,
+                    formal.sh (all proofs), synth_ihp.sh (IHP area), sta.sh (timing estimate)
 gds/                the layout (GDS, LEF), layout images and a results summary
-docs/               design reference and ISA spec, beginner's guide, formal verification guide
-                    (PDF + LaTeX), architecture diagram, info.md (datasheet page), layout renders
+docs/               every document as PDF + LaTeX (README.md lists them), architecture diagram,
+                    info.md (datasheet page), layout renders
   diagram/          diagram generator (make_diagram.py) and its fonts (SIL OFL)
 .github/workflows/  gds (Tiny Tapeout GDS, precheck, gate-level test, viewer), test (cocotb),
-                    docs (datasheet check), sim (every pin-level test), formal (every proof)
+                    docs (datasheet check), sim (every pin-level test, sigrok, lint), formal (every proof)
 ```
 
 Module hierarchy:
@@ -232,7 +236,7 @@ bash scripts/formal.sh
 ```
 
 [formal/README.md](formal/README.md) lists what each proof covers, and
-[docs/formal_verification_guide.pdf](docs/formal_verification_guide.pdf) explains the method.
+the formal part of [docs/toolchain_guide.pdf](docs/toolchain_guide.pdf) explains the method.
 
 ## Other checks
 
@@ -258,10 +262,10 @@ python docs/diagram/make_diagram.py      # writes docs/protocol_emulator_archite
 All tests pass, and the design places, routes and meets timing at every corner on 6 × 4 Tiny
 Tapeout tiles on the CMOS5L template.
 Known limits are listed in the design reference; the main ones are the return link bandwidth
-(full-size Ethernet frames overflow and are reported), the instruction link rate when feeding
-fast fixed-timing lines. Still to do:
-formal proofs for the UART receiver and the frame chain counters, and a Quartus compile
-(so far checked with Yosys, Verilator and Icarus).
+(full-size Ethernet frames overflow and are reported) and the instruction link rate when feeding
+fast fixed-timing lines. Not yet proven formally, and covered by simulation instead: the UART
+receiver, the frame chain counters and the control unit. Still to do: a green `gds` run on GitHub
+(it adds the full KLayout DRC of the precheck) and a test on real hardware.
 
 ## Licence
 

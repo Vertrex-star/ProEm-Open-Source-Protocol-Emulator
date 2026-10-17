@@ -11,12 +11,15 @@ then sends and receives frames on the `uio` pins. Received data and a status byt
 back to the host on `uo[0]`.
 
 Each channel is a frame chain (START, up to six headers, MAIN, END and a watchdog) behind a line
-codec, so the same hardware speaks UART, SPI (controller and target), I2C (controller with clock
-stretching, and target), PS/2, 10BASE-T receive (Manchester) and USB low speed (NRZI with bit
-stuffing). Two `BRANCH` rules per channel let a frame change direction or abort on a field it has
+codec, so the same hardware speaks UART, SPI (controller in all four modes, and target), I2C
+(controller with clock stretching, and target), PS/2, 10BASE-T receive (Manchester) and USB low
+speed (NRZI with bit stuffing). Two `BRANCH` rules per channel let a frame change direction or abort on a field it has
 just received, which gives I2C target mode, SWD-style acknowledge handling and CAN-style
 arbitration. A CRC unit per channel checks or appends any CRC of 1 to 16 bits, and a reply pattern
-answers a good frame on its own (USB ACK handshake, CAN acknowledge slot).
+answers a good frame on its own (USB ACK handshake, CAN acknowledge slot). Sixteen more standards
+are tested with ready-made programs in `docs/standards_guide.pdf`: RS-232/422/485, MIDI, NMEA 0183,
+PROFIBUS DP, Modbus RTU, DMX512, LIN, K-Line, SDI-12, SMBus/PMBus, MDIO, SD card (SPI mode),
+3-wire SPI, DALI, CAN 2.0B / NMEA 2000 and RC5 infrared.
 
 ![Architecture](architecture_datasheet.png)
 
@@ -64,11 +67,13 @@ inputs only.
    A is the controller (SCL on pad 2), channel B the target at 0x42 reading SDA on pad 0 and
    answering on pad 3.
 
-All of these are in `test/test.py` (cocotb), which runs on the RTL and on the gate-level netlist.
-The full pin-level test suite for every standard is in `sim/` (`scripts/run.sh`).
+These loopbacks, a CRC-8 append and check between the channels, and the auto-baud and error
+checks are in `test/test.py` (cocotb), which runs on the RTL and on the gate-level netlist. The
+full pin-level test suite for every standard is in `sim/` (`scripts/run.sh`).
 
 ## External hardware
 
 None required. For I2C add pull-up resistors on the pads you use for SDA and SCL. For USB low
 speed as a device, add a 1.5 kOhm pull-up on D-. For 10BASE-T receive use an isolation
-transformer and a comparator in front of the input pad.
+transformer and a comparator in front of the input pad. For CAN, LIN, RS-485 or K-Line add the
+matching transceiver; the select output can drive an RS-485 driver enable.

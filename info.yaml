@@ -10,7 +10,7 @@ project:
   title: "ProEm - Open Source Protocol Emulator"
   author: "Paul Vincent Bezzina"
   discord: ""
-  description: "Two-channel programmable protocol emulator: UART, SPI, I2C, PS/2, 10BASE-T receive and USB low speed from one instruction set"
+  description: "Two-channel programmable protocol emulator: UART, SPI, I2C, CAN, USB low speed, 10BASE-T receive and 20 more serial standards from one instruction set, with on-chip CRC"
   language: "SystemVerilog"
   clock_hz: 50000000
 
