@@ -4,9 +4,8 @@ ProEm is an open-source protocol emulator ASIC: a chip that lets an RP2040 speak
 hardware. The RP2040 describes a frame in a few instruction bytes; the chip runs it at up to one
 bit per clock, with exact timing, and sends back what it received plus a status for every frame.
 
-Target: IHP SG13CMOS5L 130 nm through [Tiny Tapeout](https://tinytapeout.com) (6 × 4 tiles, as the Jane Street challenge sets), 50 MHz.
+Target: IHP SG13CMOS5L 130 nm through [Tiny Tapeout](https://tinytapeout.com) (6 × 4 tiles), 50 MHz.
 Top module for Tiny Tapeout: `tt_um_vertrex_star_proem`.
-Built for the [Jane Street protocol emulator ASIC competition](https://blog.janestreet.com/protocol-emulator-asic-competition/).
 
 ![Architecture](docs/images/protocol_emulator_architecture.png)
 
