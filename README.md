@@ -8,6 +8,13 @@ Target: IHP SG13CMOS5L 130 nm through [Tiny Tapeout](https://tinytapeout.com) (6
 Top module for Tiny Tapeout: `tt_um_vertrex_star_proem`.
 
 ![Architecture](docs/images/protocol_emulator_architecture.png)
+## Contribution
+
+|Name                        | Affiliation               | E-mail                |
+|-----------------------------|---------------------------|-----------------------|
+| Paul Vincent Bezzina (lead) | University College London | zceepvb@ucl.ac.uk     |
+| Jeffery Chan (co-author)    | University of Bristol     | qf26282@bristol.ac.uk |
+| Junzhe Chen (advisor)       | University of Bristol     | gm25424@bristol.ac.uk |
 
 ## At a glance
 
