@@ -12,7 +12,7 @@ Top module for Tiny Tapeout: `tt_um_vertrex_star_proem`.
 
 |Name                        | Affiliation               | E-mail                |
 |-----------------------------|---------------------------|-----------------------|
-| [Paul Vincent Bezzina (lead)](https://github.com/Vertrex-star)    | University College London | zceepvb@ucl.ac.uk     |
+| [Paul Vincent Bezzina](https://github.com/Vertrex-star) (lead)    | University College London | zceepvb@ucl.ac.uk     |
 | [Jeffery Chan](https://github.com/classikCherryWood) (co-author)  | University of Bristol     | qf26282@bristol.ac.uk |
 | [Junzhe Chen](https://github.com/Junzhe-Chen) (advisor)           | University of Bristol     | gm25424@bristol.ac.uk |
 
