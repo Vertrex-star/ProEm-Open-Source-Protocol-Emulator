@@ -167,8 +167,7 @@ lines (I2C, USB) work on a single pad. A channel only drives its pads when `OUT`
 
 ![Layout](docs/images/layout_full.png)
 
-The GDS file, pictures of the layout and a summary of space, power, performance and the Jane Street
-challenge are in [gds/](gds/README.md).
+The GDS file, pictures of the layout and a summary of space, power and performance are in [gds/](gds/README.md).
 
 Hardened locally on 14 October 2026 (ISA v0.7.1) with the same flow the `gds` workflow uses
 (template branch `cmos5l`, LibreLane 3.1.0.dev3, IHP-Open-PDK at the commit the workflow
