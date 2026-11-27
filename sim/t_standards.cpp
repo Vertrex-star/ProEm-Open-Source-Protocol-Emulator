@@ -56,7 +56,7 @@ void feed(int ch,const E&e,size_t from=0){ int sv=CH; CH=ch;
 void tx_run(int ch,const E&e,int mode){ size_t n=std::min<size_t>(8,e.size()); int sv=CH; CH=ch; B b;
   for(size_t i=0;i<n;i++){ B x=I_data(e[i].first,e[i].second); b.insert(b.end(),x.begin(),x.end()); }
   B r=I_run(mode); b.insert(b.end(),r.begin(),r.end()); send(b); CH=sv; feed(ch,e,n); }
-void reset_both(){ int sv=CH; CH=0; program(I_clear()); CH=1; program(I_clear()); CH=sv; clear_results(); tr.clear(); tr2.clear(); m0=Wave(); m1=Wave(); scen=[](){ pin_in=0xFF; }; }
+void reset_both(){ int sv=CH; CH=0; scen=[](){ pin_in=0xFF; }; program(I_clear()); CH=1; program(I_clear()); CH=sv; clear_results(); tr.clear(); tr2.clear(); m0=Wave(); m1=Wave();  }
 std::string hexs(const U&v){ std::string s; char b[8]; for(unsigned x:v){ snprintf(b,sizeof b," %02X",x); s+=b; } return s; }
 std::string ascii(const U&v){ std::string s=" \""; for(unsigned x:v){ if(x=='\r') s+="\\r"; else if(x=='\n') s+="\\n"; else s+=(char)x; } return s+"\""; }
 U str_bytes(const char*s){ U o; for(;*s;s++) o.push_back((unsigned char)*s); return o; }

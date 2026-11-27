@@ -6,6 +6,7 @@ build/
 *.fdb_latexmk
 *.fls
 *.synctex.gz
+*.mmd
 docs/diagram/chip.svg
 runs/
 tt/
@@ -19,7 +20,9 @@ test/gate_level_netlist.v
 *.vcd
 *.fst
 *.fst.hier
+*.DS_Store
 
+.ipynb_checkpoints/
 formal/*_prove/
 formal/*_cover/
 formal/*.log
