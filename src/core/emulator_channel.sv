@@ -7,7 +7,8 @@
 // Submodules: host_fifo, line_codec, frame_chain, entry_dispatch
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: One protocol channel: the host FIFO for DATA entries, the frame chain, the entry dispatcher and the line codec.
+// It turns a configured frame into bits on its pins and brings received bits and a status per frame back towards the host.
 // =============================================================================
 
 module emulator_channel #(

@@ -1,0 +1,24 @@
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+cover: mode cover
+cover: depth 30
+
+[engines]
+prove: abc pdr
+cover: smtbmc yices
+
+[script]
+read -formal end_counter.sv end_counter_formal.sv
+prep -top end_counter_formal
+memory_map
+flatten
+opt -fast
+setundef -anyseq
+
+[files]
+../src/core/frame_chain/end_counter.sv
+end_counter_formal.sv

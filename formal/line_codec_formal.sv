@@ -7,7 +7,9 @@
 // Submodules: line_codec
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Proves the line codec's entry accounting against a reference count, with every line, clock and output setting
+// left free: every accepted entry gets exactly one tx_done, including entries dropped by cancels. Also proves the output
+// enables follow DRIVE and open drain.
 // =============================================================================
 
 module line_codec_formal (

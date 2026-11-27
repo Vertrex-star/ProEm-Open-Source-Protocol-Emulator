@@ -45,7 +45,7 @@
 \title{\color{accent}\textbf{ProEm: Toolchain and Verification Guide}\\[4pt]
 \large From SystemVerilog to a Tiny Tapeout chip: simulation, lint, coverage, formal proofs, the ASIC flow and GitHub Actions}
 \author{Paul Vincent Bezzina}
-\date{17 October 2026}
+\date{26 November 2026}
 
 \begin{document}
 \maketitle
@@ -118,7 +118,7 @@ File or folder & What it is for \\
 YAML is a plain-text format for writing down structured settings that both people and programs can read. It has only three building blocks:
 
 \begin{itemize}
-\item \textbf{A value}: text or a number, such as \texttt{50000000} or \texttt{"6x4"}.
+\item \textbf{A value}: text or a number, such as \texttt{50000000} or \texttt{"8x4"}.
 \item \textbf{A map} (also called a dictionary): names paired with values, written \texttt{name: value}.
 \item \textbf{A list}: items written one per line, each starting with a dash \texttt{-}.
 \end{itemize}
@@ -128,7 +128,7 @@ Nesting is shown by \textbf{indentation}, like Python. Everything indented under
 \begin{lstlisting}
 project:              # a map called "project"...
   title: "ProEm"      # ...containing a value called "title"
-  tiles: "6x4"
+  tiles: "8x4"
   source_files:       # ...and a list called "source_files"
     - "core/line_codec.sv"
     - "top/protocol_emulator.sv"
@@ -137,7 +137,7 @@ project:              # a map called "project"...
 The rules that catch beginners:
 \begin{itemize}
 \item Indent with \textbf{spaces only}, never tabs. Two spaces per level is the convention.
-\item A colon must be followed by a space: \texttt{tiles: "6x4"}, not \texttt{tiles:"6x4"}.
+\item A colon must be followed by a space: \texttt{tiles: "8x4"}, not \texttt{tiles:"8x4"}.
 \item \texttt{\#} starts a comment; the rest of the line is ignored.
 \item Put text in quotes when it contains a colon, a \texttt{\#}, or starts with a special character. Quoting all text, as \file{info.yaml} does, is the safe habit.
 \end{itemize}
@@ -154,7 +154,7 @@ Entry & Meaning \\
 \texttt{title}, \texttt{author}, \texttt{description} & Shown on the Tiny Tapeout website and in the printed datasheet. \\
 \texttt{language: "SystemVerilog"} & Tells the tools how to read the sources. \\
 \texttt{clock\_hz: 50000000} & The clock wanted on the real chip (50\,MHz). The demo board generates it. \\
-\texttt{tiles: "6x4"} & How much of the shared chip ProEm uses: 6 tiles wide, 4 high. This picks the die outline, 1289.28 $\times$ 710.64\,\textmu m. \\
+\texttt{tiles: "8x4"} & How much of the shared chip ProEm uses: 8 tiles wide, 4 high. This picks the die outline, 1724.16 $\times$ 710.64\,\textmu m. The Jane Street challenge's updated rules allow this size (its original brief set 6 $\times$ 4). \\
 \texttt{top\_module} & The module the flow builds. Must start with \texttt{tt\_um\_} and be unique: \texttt{tt\_um\_vertrex\_star\_proem}. \\
 \texttt{source\_files} & Every \file{.sv} file, relative to \file{src/}. A file missing here is invisible to the flow. \\
 \texttt{pinout} & Names for each pin, used only for the datasheet and website. It does not change the hardware. \\
@@ -746,9 +746,9 @@ CRC unit: the chunk loop takes one bit more than \texttt{feed\_len} & FAIL at on
 
 Covers do the same job in the other direction: each cover must be \emph{reached}, or the property it guards may be vacuous.
 
-\section{The six ProEm proofs}
+\section{The ProEm proofs}
 
-All are unbounded (PDR). Most take a few seconds; the line codec takes about 20\,s and the CRC unit about four minutes.
+There are sixteen. The six below were the first; the ten added in November (the UART receiver, the control unit, the return path, the entry dispatcher with the frame buffer, and every frame chain counter) are described in \file{formal/README.md} and in the verification report, together with the mutation testing that measures how much each proof catches. All are unbounded: most use PDR, and MAIN and the watchdog use k-induction with proved helper invariants. Most take a few seconds; the CRC unit and the UART receiver take a few minutes.
 
 \subsection{Host FIFO (\file{host\_fifo\_formal.sv})}
 Occupancy never exceeds the depth; \texttt{full} and \texttt{empty} match the count exactly; \texttt{flush} empties it; any value written comes out unchanged and in order. Covers: the FIFO fills; a tracked value travels the whole depth.
@@ -763,7 +763,7 @@ The model keeps two counts: entries written and not yet read (\texttt{total}), a
 \end{itemize}
 
 \subsection{UART transmitter (\file{uart\_tx\_formal.sv})}
-With \texttt{ratio} free (\texttt{anyconst}, 1 to 15), the model counts bits and cycles, and the proof shows every frame is a start bit, eight data bits LSB first and a stop bit, each held for exactly \texttt{ratio} clocks; the line is high whenever idle; and \texttt{tx\_ready} is high exactly when idle. Cover: a full frame of 0xA5 at 3 clocks per bit.
+With \texttt{ratio} free (1 to 15) and allowed to change on any clock, as \texttt{LINK} can rewrite it, the model takes the ratio at the start of each frame, counts bits and cycles, and the proof shows every frame is a start bit, eight data bits LSB first and a stop bit, each held for exactly that many clocks; the line is high whenever idle; and \texttt{tx\_ready} is high exactly when idle. Cover: a full frame of 0xA5 at 3 clocks per bit.
 
 \subsection{Branch unit (\file{branch\_unit\_formal.sv})}
 The harness models the two BRANCH rules from the ISA, loaded through the same configuration writes: compare the chosen block's byte under the mask with the value; take the hit or miss action; for a read-back rule, fire on a mismatch; rule 0 wins over rule 1; each rule acts at most once per frame, until the next frame starts or the rule is rewritten. It proves that \texttt{set\_mode} and \texttt{new\_mode} give the chosen action in the same cycle and only inside a frame; that \texttt{hit} and \texttt{branch\_abort} follow one cycle later and are suppressed by a frame reset; that \texttt{stall} is high for exactly the decision cycle and the abort cycle; and that \texttt{line\_watch} is set exactly when a read-back rule is enabled. A rule with \texttt{SRC} = 1 and \texttt{BLOCK} = 1 fires on the CRC result event and takes its hit action exactly when the CRC was good. The branch unit reference (\file{branch\_unit.pdf}) explains the module itself.
@@ -814,7 +814,7 @@ Verilator checks the code. Then \textbf{Yosys} performs \textbf{synthesis}: it t
 
 \subsection{2. Floorplan and power grid}
 
-The flow creates the empty die (6 $\times$ 4 tiles), places the pins where Tiny Tapeout expects them, draws rows for cells to sit in, and lays a \textbf{power distribution network} (PDN): metal stripes carrying the supply (VPWR, 1.2\,V) and ground (VGND) to every row. These are the regular vertical stripes in the layout pictures.
+The flow creates the empty die (8 $\times$ 4 tiles), places the pins where Tiny Tapeout expects them, draws rows for cells to sit in, and lays a \textbf{power distribution network} (PDN): metal stripes carrying the supply (VPWR, 1.2\,V) and ground (VGND) to every row. These are the regular vertical stripes in the layout pictures.
 
 \subsection{3. Placement (OpenROAD)}
 
@@ -836,7 +836,7 @@ The \textbf{resizer} swaps cells for stronger or weaker versions and inserts buf
 
 \begin{itemize}
 \item \textbf{Antennas}: during manufacturing, a long metal wire connected only to a transistor gate can collect charge and damage it. The flow adds small diodes where needed (51 on ProEm).
-\item \textbf{Fill}: empty space is filled with filler and decoupling cells so the chip is uniform to manufacture. Cells cover 43\,\% of the core; the rest is fill, which is why the layout looks full.
+\item \textbf{Fill}: empty space is filled with filler and decoupling cells so the chip is uniform to manufacture. Cells covered 43\,\% of the 6 $\times$ 4 core in v0.7.1 and about 32\,\% of the 8 $\times$ 4 core is expected for v0.7.2; the rest is fill, which is why the layout looks full.
 \item \textbf{RC extraction}: the flow calculates the real resistance and capacitance of every wire (the \file{.spef} file) so the final timing check uses real wire delays.
 \end{itemize}
 
@@ -916,7 +916,7 @@ Fewer metal layers means fewer ``floors'' for wires, so routing is harder and wi
 
 \subsection{Sharing one chip}
 
-Making a chip costs far too much for one small design, so \textbf{Tiny Tapeout} puts hundreds of projects on one die. The die is divided into \textbf{tiles}; each project gets a rectangle of tiles (ProEm: 6 $\times$ 4). A batch of designs manufactured together is a \textbf{shuttle}. After manufacturing (several months), chips are mounted on a \textbf{demo board}. A small microcontroller on the board picks one project at a time through an on-chip multiplexer, supplies its clock and reset, and connects its pins to the board's headers.
+Making a chip costs far too much for one small design, so \textbf{Tiny Tapeout} puts hundreds of projects on one die. The die is divided into \textbf{tiles}; each project gets a rectangle of tiles (ProEm: 8 $\times$ 4). A batch of designs manufactured together is a \textbf{shuttle}. After manufacturing (several months), chips are mounted on a \textbf{demo board}. A small microcontroller on the board picks one project at a time through an on-chip multiplexer, supplies its clock and reset, and connects its pins to the board's headers.
 
 \subsection{The pins}
 
@@ -1015,7 +1015,7 @@ A \textbf{commit} is a snapshot of the whole project. A \textbf{remote} (\texttt
 bash scripts/lint.sh                     # Verilator -Wall
 SKIP_SYNTH=1 bash scripts/run.sh         # every pin-level test (CXXRTL)
 cd test && make -B && cd ..              # cocotb, RTL
-bash scripts/formal.sh                   # six proofs (OSS CAD Suite)
+bash scripts/formal.sh                   # sixteen proofs (OSS CAD Suite)
 bash scripts/coverage.sh                 # Verilator coverage, report in build/cov
 python3 scripts/sigrok_check.py          # needs sigrok-cli and build/t_standards
 PDK_ROOT=~/pdk bash scripts/synth_ihp.sh typ_1p20V_25C   # cell count and area
@@ -1073,7 +1073,7 @@ Before submitting: push, wait for \cmd{gds}, \texttt{precheck} and \texttt{gl\_t
 \item[STA] Static timing analysis: checking all paths' timing without simulation.
 \item[Synthesis] Turning RTL into a netlist of standard cells (Yosys).
 \item[Tile] The unit of area on a Tiny Tapeout chip (about 202 $\times$ 155\,\textmu m on IHP).
-\item[Utilisation] Share of the core area covered by cells (ProEm: 43\,\% after place and route).
+\item[Utilisation] Share of the core area covered by cells (ProEm: 43\,\% at 6 $\times$ 4 in v0.7.1; about 32\,\% expected at 8 $\times$ 4).
 \item[Vacuous proof] A proof that passes only because the situation it talks about can never occur.
 \item[Verilator] Open-source Verilog linter and fast simulator.
 \item[Workflow] A YAML recipe that GitHub Actions runs.

@@ -7,7 +7,8 @@
 // Submodules: crc_unit
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Proves the 8-bit-per-clock CRC update equals a bit-by-bit CRC of any width from 1 to 16 and any polynomial, and
+// that the result, the good flag and the appended CRC are as the ISA describes.
 // =============================================================================
 
 module crc_unit_formal (

@@ -7,7 +7,9 @@
 // Submodules: first_counter, header_counter (x6), start_router, branch_unit, main_counter, end_counter, watchdog, crc_unit, frame_buffer
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Runs one frame: START, up to six headers, MAIN and END in order through the start router, with the watchdog, the
+// branch unit, the CRC unit and the frame buffer. It decides complete, abort and timeout, and writes the frame's entries and
+// its status into the frame buffer.
 // =============================================================================
 
 module frame_chain #(
@@ -282,7 +284,8 @@ end
 assign listen = line_free && ((|block_listening) || main_listening);
 assign wire_accept = fifo_wr && fifo_din[12] && !out_full && !abort && !halt;
 assign main_run = main_enable && !finish_wait && !tail_active;
-assign complete = (main_done_eff && !(line_watch && main_writing)) || (finish_wait && line_free);
+// An abort on the same clock wins, so a frame's status never has complete and abort set together.
+assign complete = ((main_done_eff && !(line_watch && main_writing)) || (finish_wait && line_free)) && !abort;
 assign write_end = timeout && main_writing && main_run;
 assign underrun = strict_tx && main_run && main_writing && !main_have_data && line_free && !main_pending && !main_listening && !write_end;
 assign i2c_break = i2c_target && (i2c_start || i2c_stop) && block_success[0];
@@ -563,6 +566,7 @@ main_counter main_block (
 	.fifo_free(!(|block_push) && (!main_writing || space)),
 	.end_success(main_end),
 	.abort(abort || halt),
+	.keep_pending(branch_abort && !halt),
 	.host_empty(host_empty),
 	.host_data(host_data),
 	.host_len(host_len),

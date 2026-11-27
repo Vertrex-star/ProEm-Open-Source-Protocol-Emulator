@@ -4,7 +4,7 @@ ProEm is an open-source protocol emulator ASIC: a chip that lets an RP2040 speak
 hardware. The RP2040 describes a frame in a few instruction bytes; the chip runs it at up to one
 bit per clock, with exact timing, and sends back what it received plus a status for every frame.
 
-Target: IHP SG13CMOS5L 130 nm through [Tiny Tapeout](https://tinytapeout.com) (6 × 4 tiles), 50 MHz.
+Target: IHP SG13CMOS5L 130 nm through [Tiny Tapeout](https://tinytapeout.com) (8 × 4 tiles), 50 MHz.
 Top module for Tiny Tapeout: `tt_um_vertrex_star_proem`.
 
 ![Architecture](docs/images/protocol_emulator_architecture.png)
@@ -26,9 +26,9 @@ Top module for Tiny Tapeout: `tt_um_vertrex_star_proem`.
 | Reacting on chip | `BRANCH` rules change a frame's direction, or abort it, from a field just received or from the line not reading back what the chip drove |
 | CRC and reply on chip | Any CRC of 1 to 16 bits, checked on receive or appended on transmit; a fixed reply (USB ACK, CAN ACK slot) sent a set number of bits after a good or bad frame |
 | Long packets | `DATA` streams while a frame runs; fixed-timing lines report an underrun if the data runs out |
-| Logic | 18,969 cells after synthesis, 25,612 after place and route (43 % of the 6 × 4 core area) |
-| Timing | Met after routing at all three corners on CMOS5L: 3.84 ns setup slack at 1.08 V, 125 °C (up to 62 MHz) |
-| Instruction set | ISA v0.7.1, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
+| Logic | 19,003 cells after synthesis (v0.7.2); about 32 % of the 8 × 4 core area expected after place and route |
+| Timing | 6 × 4 layout of v0.7.1: met after routing at all three corners (3.84 ns setup slack at 1.08 V, 125 °C). The 8 × 4 layout of v0.7.2 comes from the `gds` workflow |
+| Instruction set | ISA v0.7.2, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
 
 ## How it works
 
@@ -140,7 +140,8 @@ the hierarchy, submodules, author, and a description line.
 
 The chip is packaged as a Tiny Tapeout project on the CMOS5L template (the `cmos5l` branch of
 Tiny Tapeout's IHP template), as the Jane Street challenge asks (`info.yaml`, `src/config.json`,
-top module `tt_um_vertrex_star_proem`). Every push runs the `gds` workflow, which builds the
+top module `tt_um_vertrex_star_proem`), at 8 × 4 tiles, the size the challenge's updated rules
+allow (the original brief set 6 × 4). Every push runs the `gds` workflow, which builds the
 layout for IHP SG13CMOS5L with LibreLane, runs the Tiny Tapeout precheck and the cocotb test on
 the gate-level netlist, and publishes a 3D viewer. A green `gds` run is what the challenge
 needs for a submission.
@@ -169,28 +170,26 @@ lines (I2C, USB) work on a single pad. A channel only drives its pads when `OUT`
 
 The GDS file, pictures of the layout and a summary of space, power and performance are in [gds/](gds/README.md).
 
-Hardened locally on 14 October 2026 (ISA v0.7.1) with the same flow the `gds` workflow uses
-(template branch `cmos5l`, LibreLane 3.1.0.dev3, IHP-Open-PDK at the commit the workflow
-installs), at the 6 × 4 tiles the Jane Street challenge sets. The GDS and LEF in [gds/](gds/README.md)
-are this layout.
+From v0.7.2 (26 November 2026) the project uses **8 × 4 tiles** (1724.16 × 710.64 µm, set in
+`info.yaml`). The layout is built by the `gds` workflow on every push with the Tiny Tapeout CMOS5L
+flow (LibreLane 3.1.0.dev3, IHP-Open-PDK `2bbec755`); take the GDS and LEF from that run's
+artifact and put them in [gds/](gds/README.md). Until then, the figures below are what is known
+for 8 × 4 and the last routed layout (v0.7.1 at 6 × 4) is kept for reference.
 
-| | |
-| --- | --- |
-| Process | IHP SG13CMOS5L 130 nm |
-| Tiles | 6 × 4, 1289.28 × 710.64 µm |
-| Cells | 18,969 after synthesis; 25,612 after place and route, not counting fill (includes 6,104 timing repair buffers and 362 clock tree cells) |
-| Utilisation | 43 % of the core area |
-| Routing | 0 violations after detailed routing, 0 antenna violations |
-| Sign-off checks | Magic DRC 0 errors, LVS clean, no illegal overlaps; cocotb gate-level tests pass on the routed netlist |
-| Setup slack at 50 MHz | 9.8 ns typical, 3.8 ns slow (1.08 V, 125 °C), 12.4 ns fast |
-| Hold slack | 0.29 ns typical, 0.61 ns slow, 0.10 ns fast |
-| Maximum clock | 98 MHz typical, 62 MHz at the slow corner |
-| Power | about 10.2 mW at 50 MHz (8.1 to 12.7 mW across corners) |
+| | 8 × 4, v0.7.2 | 6 × 4, v0.7.1 (14 October) |
+| --- | --- | --- |
+| Die | 1724.16 × 710.64 µm (1,225,262 µm²) | 1289.28 × 710.64 µm (916,214 µm²) |
+| Core | 1,208,173 µm² | 902,417 µm² |
+| Cells after synthesis | 19,003 (LibreLane synthesis, 301,423 µm²) | 18,969 |
+| Cells after place and route | from the `gds` run | 25,612, not counting fill |
+| Utilisation | about 32 % expected | 43 % |
+| Setup slack at 50 MHz | from the `gds` run | 9.8 ns typical, 3.8 ns slow, 12.4 ns fast |
+| Power | from the `gds` run; expected close to 10 mW | about 10.2 mW |
 
-The CMOS5L flow only checks timing at the typical corner; this layout meets all three. The
-first v0.7.1 layout missed the slow corner by 3.8 ns; the changes that closed it (a registered
-CRC input, a faster CRC update, registered FIFO and buffer state, and setup repair after global
-routing in `src/config.json`) are described in
+The 8 × 4 die gives the same logic a third more room, which eases placement and routing; the
+v0.7.2 changes add 34 cells. The slow-corner timing changes of v0.7.1 (a registered CRC input, a
+faster CRC update, registered FIFO and buffer state, and setup repair after global routing in
+`src/config.json`) are kept, and are described in
 [docs/verification_report.pdf](docs/verification_report.pdf).
 
 ## Running the tests
@@ -267,12 +266,14 @@ bash scripts/docs.sh                     # rebuilds every PDF in docs/ (needs pd
 
 ## Status and limits
 
-All tests pass, and the design places, routes and meets timing at every corner on 6 × 4 Tiny
-Tapeout tiles on the CMOS5L template.
+All tests and all sixteen formal proofs pass on v0.7.2. The v0.7.1 design placed, routed and
+met timing at every corner on 6 × 4 tiles; v0.7.2 targets 8 × 4 tiles and its layout comes from
+the `gds` workflow.
 Known limits are listed in the design reference; the main ones are the return link bandwidth
 (full-size Ethernet frames overflow and are reported) and the instruction link rate when feeding
-fast fixed-timing lines. Not yet proven formally, and covered by simulation instead: the UART
-receiver, the frame chain counters and the control unit. Still to do: a green `gds` run on GitHub
+fast fixed-timing lines. Every block has a formal proof except the integration of the frame
+chain, the channel and the chip core, and the line codec's data path; those are covered by
+simulation and sigrok (see the verification report). Still to do: a green `gds` run on GitHub
 (it adds the full KLayout DRC of the precheck) and a test on real hardware.
 
 ## Licence

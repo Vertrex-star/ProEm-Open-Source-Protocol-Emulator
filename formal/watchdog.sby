@@ -1,0 +1,28 @@
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+prove: depth 4
+cover: mode cover
+cover: depth 30
+
+[engines]
+prove: smtbmc yices
+cover: smtbmc yices
+
+[script]
+read -formal watchdog.sv watchdog_formal.sv
+prep -top watchdog_formal
+memory_map
+flatten
+connect -set peek_counter dut.counter
+connect -set peek_limit dut.internal_limit
+techmap
+opt -fast
+setundef -anyseq
+
+[files]
+../src/core/frame_chain/watchdog.sv
+watchdog_formal.sv

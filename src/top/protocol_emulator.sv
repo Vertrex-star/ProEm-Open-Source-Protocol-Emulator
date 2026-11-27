@@ -7,7 +7,8 @@
 // Submodules: uart_rx, control_unit, emulator_channel (x2), return_path
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Chip core: synchronises every input pin, receives instructions on the host UART, and runs the two emulator
+// channels A and B side by side. Received data, frame status and link events go back to the host through the return path.
 // =============================================================================
 
 module protocol_emulator #(

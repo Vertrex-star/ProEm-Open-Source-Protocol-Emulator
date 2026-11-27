@@ -7,7 +7,8 @@
 // Submodules: uart_tx
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Sends everything back to the host as two-byte messages on the return UART, serving channel A, channel B and the
+// link event flags in turn. Link events are collected until a flags message carries them.
 // =============================================================================
 
 module return_path #(

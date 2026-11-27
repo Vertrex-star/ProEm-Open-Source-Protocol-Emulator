@@ -7,7 +7,8 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Small first-in first-out buffer with a registered head entry, used for the DATA entries of each channel. Writes
+// when full and reads when empty are ignored, and flush empties it.
 // =============================================================================
 
 module host_fifo #(

@@ -7,7 +7,8 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: 8N1 UART transmitter: one start bit, eight data bits LSB first and one stop bit, each held for clk_ratio clocks.
+// The ratio is taken when a frame starts, so a new LINK divider never changes a byte already on the line.
 // =============================================================================
 
 module uart_tx #(
@@ -25,6 +26,7 @@ module uart_tx #(
 
 logic [7:0] shiftReg;
 logic [RATIO_WIDTH-1:0] clkCount;
+logic [RATIO_WIDTH-1:0] frameRatio;
 logic [2:0] bitIndex;
 logic internal_serial;
 
@@ -41,6 +43,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 	if (!rst_n) begin
 		select <= IDLE;
 		clkCount <= '0;
+		frameRatio <= '0;
 		bitIndex <= '0;
 		shiftReg <= '0;
 		internal_serial <= 1'b1;
@@ -51,6 +54,8 @@ always_ff @(posedge clk or negedge rst_n) begin
 				bitIndex <= '0;
 				internal_serial <= 1'b1;
 				if (tx_valid) begin
+					// The rate is taken once per frame, so a new LINK divider never changes a byte already on the line.
+					frameRatio <= clk_ratio;
 					shiftReg <= tx_data;
 					internal_serial <= 1'b0;
 					select <= START;
@@ -58,7 +63,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 			end
 
 			START: begin
-				if (clkCount == clk_ratio - 1'b1) begin
+				if (clkCount == frameRatio - 1'b1) begin
 					clkCount <= '0;
 					internal_serial <= shiftReg[0];
 					select <= SEND;
@@ -68,7 +73,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 			end
 
 			SEND: begin
-				if (clkCount == clk_ratio - 1'b1) begin
+				if (clkCount == frameRatio - 1'b1) begin
 					clkCount <= '0;
 					shiftReg <= {1'b0, shiftReg[7:1]};
 					if (bitIndex == 3'd7) begin
@@ -84,7 +89,7 @@ always_ff @(posedge clk or negedge rst_n) begin
 			end
 
 			STOP: begin
-				if (clkCount == clk_ratio - 1'b1) begin
+				if (clkCount == frameRatio - 1'b1) begin
 					clkCount <= '0;
 					select <= IDLE;
 				end else begin

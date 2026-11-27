@@ -62,7 +62,7 @@ A(f'<rect width="{W}" height="{H}" fill="{C["bg"]}"/>')
 
 T(60,80,"ProEm · Protocol Emulator ASIC",48,w=700,anchor="start",fam="disp")
 T(W-60,72,"Paul Vincent Bezzina  |  Open Source Protocol Emulator",20,C["muted"],anchor="end",w=500)
-T(60,118,"Full architecture · ISA v0.7.1 · IHP 130 nm through Tiny Tapeout (6 × 4 tiles) · 50 MHz system clock",20,C["muted"],anchor="start")
+T(60,118,"Full architecture · ISA v0.7.2 · IHP 130 nm through Tiny Tapeout (8 × 4 tiles) · 50 MHz system clock",20,C["muted"],anchor="start")
 
 rect(300,160,2100,1300,"none",C["muted"],r=16,sw=1.6,dash="10 7")
 T(322,190,"CHIP · protocol_emulator",15,C["muted"],anchor="start",w=500,fam="mono")
@@ -71,7 +71,7 @@ box(40,220,220,1220,"RP2040",["host / demo board","","sends ISA bytes","0x55 fir
 box(2440,220,320,1220,"Bus & pads",["pin_in[7:0] → chip","","per channel, each with","an output enable:","data · pair (D−)","clock · select","","open drain: enable","pulls the pad low","","bidirectional pads","(SDA, SCL, D+, D−)","are read back","through pin_in","","UART · SPI · I²C · PS/2","10BASE-T · USB LS · CAN"],"plain",28,14)
 
 box(330,220,290,120,"UART receiver",["auto-baud on 0x55 (8 bit times)","8N1 → byte + valid","rx_error on a low stop bit"],"cf",20)
-box(330,380,290,300,"Control unit",["ISA v0.7.1 decoder","opcode · CH · N + 0–4 operands","","registered cfg bus → chain A / B","RUN · HALT · CLEAR pulses","DATA → host FIFO · BRANCH: rules,","CRC set-up and reply pattern","LINE · CLOCK · OUT per channel","LINK divider for the return","cmd_error on bad BRANCH / HDR"],"cf",22)
+box(330,380,290,300,"Control unit",["ISA v0.7.2 decoder","opcode · CH · N + 0–4 operands","","registered cfg bus → chain A / B","RUN · HALT · CLEAR pulses","DATA → host FIFO · BRANCH: rules,","CRC set-up and reply pattern","LINE · CLOCK · OUT per channel","LINK divider for the return","cmd_error on bad BRANCH / HDR"],"cf",22)
 box(330,1250,290,180,"Return path",["round robin: A · B · link events","2-byte messages","{10 C 0 len} + value","len 14 = CRC result","len 15 = frame status","UART TX at the LINK rate"],"gold",22)
 line([(262,280),(328,280)],C["cf"]); labbg(295,270,"rx_serial",C["cf"])
 line([(475,340),(475,378)],C["cf"])
@@ -166,17 +166,17 @@ T(60,1744,"plus 16 more standards, receive and transmit: RS-232/422/485 · MIDI 
 T(60,1768,"and 1,800 random programs, 600 random branch programs, 60 random CRCs chip to chip, SWD-style acknowledge, streaming and underrun, control tests: auto-baud, HALT, CLEAR, LINK, watchdog, error flags",15,C["muted"],anchor="start")
 
 T(60,1806,"Where the logic cells go",28,w=700,anchor="start",fam="disp")
-T(372,1806,"IHP cells per block (hierarchical synthesis, 19,145 in all) · routed layout: 25,612 cells with repair buffers and clock tree, 43 % of the core · timing met at every corner",16,C["muted"],anchor="start")
+T(372,1806,"IHP cells per block (hierarchical synthesis, 19,145 in all) · repair buffers and clock tree as in the last routed layout · bar drawn against the 8 × 4 core",16,C["muted"],anchor="start")
 parts=[("Chain A",5907,C["rx"]),("CRC A",846,"#0E5A55"),("Codec A",1597,C["cd"]),("Host FIFO A",319,C["tx"]),("Chain B",5907,"#3E9C95"),("CRC B",846,"#2C7A74"),("Codec B",1597,"#6F8FC0"),("Host FIFO B",319,"#D98A5C"),
        ("Control unit",961,C["cf"]),("UART RX",434,"#9A90D0"),("Return path",324,C["gold"]),("Repair + clock tree",6467,"#B9C4C1")]
-x0,y0,wt=60,1826,2680; total=25612/0.43
+x0,y0,wt=60,1826,2680; total=(25612/0.43)*(1208173/902417)  # cells that would fill the 8 x 4 core
 rect(x0,y0,wt,46,"#E6ECEA",C["rule"],r=6)
 x=x0
 for name,v,c in parts:
     w=wt*v/total
     A(f'<rect x="{x:.1f}" y="{y0}" width="{w:.1f}" height="46" fill="{c}"/>'); x+=w
-T(x+18,y0+30,"free ≈ 57 % of the core area",16,C["muted"],anchor="start",w=500)
-T(x0+wt-12,y0+30,"6 × 4 tiles",15,C["muted"],anchor="end",w=500)
+T(x+18,y0+30,f"free ≈ {100-100*25612/total:.0f} % of the core area",16,C["muted"],anchor="start",w=500)
+T(x0+wt-12,y0+30,"8 × 4 tiles",15,C["muted"],anchor="end",w=500)
 for i,(name,v,c) in enumerate(parts):
     xx=x0+i*224; yy=y0+80
     A(f'<rect x="{xx}" y="{yy-13}" width="16" height="16" rx="3" fill="{c}"/>')

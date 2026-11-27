@@ -7,7 +7,8 @@
 // Submodules: tt_um_vertrex_star_proem
 // Author: Paul Vincent Bezzina
 // Language: Verilog
-// Description:
+// Description: cocotb test bench: wraps the Tiny Tapeout top level with named signals for test/test.py, and runs on the RTL or
+// on the gate-level netlist. It dumps a waveform for every run.
 // =============================================================================
 
 `default_nettype none

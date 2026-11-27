@@ -28,7 +28,7 @@ unsigned pin_in=0;
 V got[2]; std::vector<unsigned> status[2]; std::vector<unsigned> global_flags;
 int ret_state=0, ret_count=0, ret_bit=0; unsigned ret_byte=0; std::vector<unsigned> ret_bytes;
 void ret_decode(){ int r=RET_R?RET_R:INS_R; int lv=t.p_tx__serial.get<bool>();
-  if(ret_state==0){ if(!lv){ ret_state=1; ret_count=r/2; } return; }
+  if(ret_state==0){ if(!lv){ if(r<2){ ret_state=2; ret_bit=0; ret_byte=0; ret_count=1; } else { ret_state=1; ret_count=r/2; } } return; }
   if(--ret_count>0) return;
   if(ret_state==1){ if(lv){ ret_state=0; return; } ret_state=2; ret_bit=0; ret_byte=0; ret_count=r; return; }
   if(ret_state==2){ ret_byte|=(unsigned)lv<<ret_bit; ret_bit++; ret_count=r; if(ret_bit==8) ret_state=3; return; }

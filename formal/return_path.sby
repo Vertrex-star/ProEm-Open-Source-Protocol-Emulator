@@ -1,0 +1,33 @@
+[tasks]
+prove
+cover
+line
+
+[options]
+prove: mode prove
+cover: mode cover
+cover: depth 60
+line: mode bmc
+line: depth 50
+
+[engines]
+prove: abc pdr
+cover: smtbmc yices
+line: smtbmc yices
+
+[script]
+~line: read -formal uart_tx.sv return_path.sv return_path_formal.sv
+line: read -formal -D LINE_CHECK uart_tx.sv return_path.sv return_path_formal.sv
+prep -top return_path_formal
+memory_map
+flatten
+connect -set peek_byte dut.sendByte
+connect -set peek_valid dut.uartValid
+connect -set peek_ready dut.uartReady
+opt -fast
+setundef -anyseq
+
+[files]
+../src/primitives/uart_tx.sv
+../src/core/return_path.sv
+return_path_formal.sv

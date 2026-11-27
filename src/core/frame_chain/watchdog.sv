@@ -7,7 +7,8 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Ends a frame that stalls: raises timeout after WDOG clocks with the chain busy and no tick, and repeats every
+// WDOG clocks while it stays stalled. A limit of 0 turns it off.
 // =============================================================================
 
 module watchdog (

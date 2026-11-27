@@ -7,7 +7,8 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Reads entries from the frame buffer one at a time and routes each one: wire entries to the line codec's sender,
+// host entries to the return path. After a cancel it discards wire entries until the frame's status entry has passed.
 // =============================================================================
 
 module entry_dispatch (

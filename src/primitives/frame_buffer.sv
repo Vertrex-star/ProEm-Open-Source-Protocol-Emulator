@@ -7,7 +7,8 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: The frame's output buffer: a FIFO with a commit point, so entries of a frame can be discarded (rollback) until
+// they are committed. Reads only ever see committed entries.
 // =============================================================================
 
 module frame_buffer #(

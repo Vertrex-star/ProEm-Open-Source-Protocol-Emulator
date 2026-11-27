@@ -12,9 +12,11 @@
 \definecolor{codebg}{HTML}{F4F7F6}
 \definecolor{passc}{HTML}{1E7B34}
 \definecolor{fixc}{HTML}{B5520B}
+\definecolor{flagc}{HTML}{8A1F11}
 \newcommand{\sig}[1]{\texttt{#1}}
 \newcommand{\pass}{\textcolor{passc}{\textbf{pass}}}
 \newcommand{\fixed}{\textcolor{fixc}{\textbf{fixed}}}
+\newcommand{\flag}{\textcolor{flagc}{\textbf{flagged}}}
 \newcolumntype{L}{>{\raggedright\arraybackslash}X}
 \setlist{itemsep=2pt,topsep=4pt}
 \setlength{\parskip}{4pt}
@@ -27,16 +29,18 @@
 \rhead{\small Verification report}
 \cfoot{\small\thepage}
 
-\title{ProEm: Verification Report\\\large Design frozen at ISA v0.7.1}
+\title{ProEm: Verification Report\\\large ISA v0.7.2, second edition}
 \author{Paul Vincent Bezzina}
-\date{17 October 2026}
+\date{26 November 2026}
 
 \begin{document}
 \maketitle
 \thispagestyle{fancy}
 
 \begin{abstract}
-The architecture is frozen at ISA v0.7. This report covers the checks run on that design before hardening: lint, synthesis and a full place and route with the Tiny Tapeout CMOS5L flow, gate-level simulation, a second simulator, an independent decode of the standards waveforms with sigrok, line coverage, and a formal proof of the line codec's entry accounting. Two real bugs came out of it, both in the line codec, both fixed with small local changes; nothing in the instruction set changed. The design is released as v0.7.1. The first layout missed the slow corner by 3.8\,ns; after a set of local timing changes (Section~\ref{sec:pnr}) the layout meets every corner, with 3.8\,ns to spare at the slow one and 9.8\,ns at typical. What is left is the GitHub run of the same flow and real hardware.
+The first edition of this report (17 October) signed off v0.7.1: lint, synthesis, place and route at three corners, gate-level simulation, a second simulator, sigrok, coverage and six formal proofs. Two bugs came out of it, both fixed. This edition widens the formal side. Ten more proofs cover every block that had none: the host UART receiver, the control unit, the return path, the entry dispatcher together with the frame buffer, and every counter of the frame chain. Fifteen of the sixteen proofs are now also put through mutation testing: small faults are planted in the RTL, one at a time, and the proof must catch each one that changes behaviour. That turns ``the proof passes'' into a number for how much it can be trusted. No RTL logic was changed and the layout is untouched; the only change under \sig{src/} is a one- or two-sentence description in each file header. No new bug was found in the logic. Seven observations are flagged in Section~\ref{sec:flags} for a decision, none of which affects a standard in the guide; one of them, about rewriting \sig{LINK} while the return link is busy, was found by mutation testing of an existing proof. The results of the first edition are kept in Part~\ref{part:signoff}.
+
+\textbf{Revised for v0.7.2.} Following these findings, v0.7.2 fixes five of the seven in the RTL; the other two need no change (Section~\ref{sec:fixes}). Every proof was re-run on v0.7.2, the UART transmitter's proof now lets the divider change on any clock, the receiver is proved from 1 clock per bit, and the full pin-level regression passes, with two new checks. The project now targets 8 $\times$ 4 tiles; its layout comes from the \sig{gds} workflow, so the place-and-route results in Part~\ref{part:signoff} are those of v0.7.1 at 6 $\times$ 4.
 \end{abstract}
 
 \section{Summary}
@@ -46,20 +50,218 @@ The architecture is frozen at ISA v0.7. This report covers the checks run on tha
 \toprule
 Check & What was run & Result \\
 \midrule
-Freeze & v0.7 tagged as the baseline; the pulse-width work started on top of it was discarded & done \\
-Lint & Verilator 5.020 \sig{-Wall} on the whole design; 26 warnings, each reviewed; 13 waivers recorded in \sig{lint/waivers.vlt} & \pass \\
-Synthesis & Yosys and ABC to \sig{sg13cmos5l} cells, typical and slow corners (\sig{scripts/synth\_ihp.sh}) & 36\,\% of the 6x4 tile \\
-Place and route & LibreLane 3.1 with the Tiny Tapeout CMOS5L configuration, 6x4 tiles, 50\,MHz & \pass{} at all three corners \\
-Gate level & The cocotb suite on the synthesised and on the routed netlist, with the IHP cell models (Icarus) & \pass{} 6/6, both \\
-Second simulator & Every pin-level test rebuilt on Verilator instead of CXXRTL & \pass{} \\
-Independent decode & 30 waveforms from the standards tests decoded by sigrok's protocol decoders (\sig{scripts/sigrok\_check.py}) & \pass{} 30/30 \\
-Coverage & Verilator line and branch coverage over the whole regression (\sig{scripts/coverage.sh}) & 98.7\,\% \\
-New directed test & SPI controller in all four modes, both BRANCH rules, NOP (\sig{sim/t\_modes.cpp}) & bug, \fixed \\
-Formal & Unbounded proof of the line codec's entry accounting and output enables (\sig{formal/line\_codec.sby}) & bug, \fixed \\
-Regression & Full \sig{scripts/run.sh}, cocotb, all six formal proofs, on the fixed RTL & \pass \\
+RTL & v0.7.2: five corrections (Section~\ref{sec:fixes}) and a description in each file header & changed \\
+New proofs & Ten harnesses (Section~\ref{sec:new}): \sig{uart\_rx}, \sig{control\_unit}, \sig{return\_path}, \sig{entry\_dispatch} with \sig{frame\_buffer}, \sig{start\_router}, \sig{first\_counter}, \sig{header\_counter}, \sig{main\_counter}, \sig{end\_counter}, \sig{watchdog} & \pass{} 10/10 \\
+All proofs & Sixteen proofs, prove and cover tasks (\sig{scripts/formal.sh}) & \pass{} 16/16 \\
+Long tasks & \sig{uart\_rx} over ratios 1 to 7, and the return path decoded at the serial pin (\sig{FORMAL\_DEEP=1}), on v0.7.2 & \pass{} \\
+Gate level & cocotb suite on the v0.7.2 RTL (6/6); the gate-level run on the 8 $\times$ 4 netlist is the \sig{gl\_test} job & \pass{} RTL \\
+Mutation testing & 211 planted faults over fifteen proofs, 186 of 203 behaviour-changing ones killed, every survivor reviewed (\sig{scripts/mutate.py}, Section~\ref{sec:mutation}; the CRC unit not completed) & 91.6\,\% killed \\
+Regression & Full \sig{scripts/run.sh} and lint on v0.7.2, with auto-baud at 1 clock per bit and the new \sig{cmd\_error} checks added & \pass \\
+Findings & Seven observations (Section~\ref{sec:flags}); five fixed in v0.7.2, two need no change & \fixed \\
+Layout & 8 $\times$ 4 tiles from v0.7.2, built by the \sig{gds} workflow & on push \\
 \bottomrule
 \end{tabularx}
 \end{center}
+
+\section{Why more formal, and why this method}
+
+After the first edition the proofs covered six blocks. Simulation covered everything, but simulation only checks the cases somebody thought of, and both earlier bugs were exactly the kind tests miss: a second cancel within two clocks of the first, and a clock edge with no hold time. The blocks without a proof were the ones every frame goes through: the instruction decoder, the receiver that feeds it, the counters that decide when a field matches, and the path that carries every result back to the host. A fault in any of them breaks every standard at once, so they are the ones most worth proving.
+
+Two questions decide whether a proof is worth anything:
+\begin{enumerate}
+\item \textbf{Is it the right property?} A proof that \sig{tx\_done} never pulses twice says nothing about whether the data is right. Each new harness therefore checks the block against a small \emph{reference model written from the ISA}, not from the RTL: the instruction table, the field layouts, the return message format, ``the last \sig{LEN} bits equal \sig{PATTERN}''. If the RTL and the document disagree, the proof fails.
+\item \textbf{Is the property strong enough?} A proof can pass because its assertions are too weak, or because an assumption quietly removes the interesting cases. Cover statements show the interesting cases are reached, but not that a wrong design would fail. Mutation testing answers that directly: change the design a little, and see whether the proof notices (Section~\ref{sec:mutation}).
+\end{enumerate}
+
+Simulation and formal verification are not alternatives here. The proofs say a block is right for every input; the pin-level tests and sigrok say the blocks together speak each standard. What is left between the two is listed in Section~\ref{sec:limits}.
+
+\section{How the proofs are built}\label{sec:method}
+
+Every proof follows the pattern of the first six: a harness in \sig{formal/} wraps the unchanged RTL, adds a reference model and assertions, and SymbiYosys proves the assertions for every input sequence with no depth limit. Four techniques carry the new proofs.
+
+\paragraph{Reference models from the ISA.} The control unit proof contains a second instruction decoder, about a hundred lines, written from the ISA's instruction table and byte layouts. It collects the operand bytes itself, high byte first, and states what every output must be on the clock the instruction takes effect. The END proof keeps its own history of received bits and states the match directly: bit $k$ ticks ago equals \sig{PATTERN}[$k$] (MSB first) or \sig{PATTERN}[\sig{LEN}$-1-k$] (LSB first). The RTL does the same with a shifted window and a mask, so the two are written differently and agree only if both are right.
+
+\paragraph{A symbolic tracked bit.} To prove that MAIN moves every bit exactly once and in order, the harness does not model every bit. It lets the solver pick \emph{any one} bit, at any time, records its value and its position in the stream, and checks that it comes out at the same position. The solver can pick any bit, so the proof covers all of them. The frame buffer and FIFO proofs already use this idea for whole entries; MAIN and the entry dispatcher use it for bits and entries.
+
+\paragraph{Composition.} Some blocks are only meaningful together. The entry dispatcher reads the frame buffer's registered output a clock after asking for it, so it is proved with the real frame buffer, wired as in \sig{emulator\_channel}. The return path is proved with its real \sig{uart\_tx}. The checks are made on the byte stream between the two, and \sig{uart\_tx\_formal} already proves every accepted byte leaves the pin exactly. A bounded task (\sig{line}) also decodes the pin itself with a reference receiver.
+
+\paragraph{Helper invariants.} Two proofs, the watchdog and MAIN, count to 65,535. ABC's PDR engine did not finish either in 15 minutes: it has to discover by itself that the RTL's counter and the reference's counter move together. Both harnesses state that relation as extra assertions, reading the internal register through a \sig{connect} in the \sig{.sby} script (Yosys cannot read hierarchical names). With these, k-induction proves both in seconds, over the full 16-bit range. This is sound: a helper invariant is an assertion like any other and is proved too, so it can only make a proof harder to pass, never easier. Helper invariants are left out of mutation runs (\sig{`ifndef MUTATION}), so a fault only counts as caught if a property of the spec catches it.
+
+\paragraph{Assumptions.} Every \sig{assume} in a harness is a promise about the block's surroundings. Each one is either proved by another harness, which makes the set a chain (Table~\ref{tab:assume}), or taken from a rule the ISA puts on the host. The few left that rest on reading the frame chain rather than on a proof are marked as such.
+
+\section{The new proofs}\label{sec:new}
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}l L l r@{}}
+\toprule
+Block & What is proved & Engine & Time \\
+\midrule
+\sig{uart\_rx} & Against a reference host that sends \texttt{0x55} and then any bytes, with any gaps: locks to the exact ratio, never passes the \texttt{0x55} on, then delivers every byte once, unchanged, in order, with no frame error. With the pin left free: \sig{rx\_valid} and \sig{frame\_error} never together and never on consecutive clocks, nothing before lock, and the rate never changes once locked & PDR & 188\,s \\
+\sig{control\_unit} & Against a second decoder from the ISA: operand count of all 16 opcodes, \sig{cfg\_sel} and every field of START, HDR, MAIN, END, WDOG, ORDER and BRANCH, START's alignment of \sig{VALUE} by bit order, exactly one pulse per instruction on its own chain and none otherwise, \sig{DATA}'s length and value, LINE, CLOCK, OUT and LINK kept until rewritten or cleared, \sig{cmd\_error} exactly for \sig{HDR 0}, \sig{HDR 7} and \sig{BRANCH} 5 to 7 & PDR & 18\,s \\
+\sig{return\_path} & Every byte handed to the UART is the next byte of the accepted messages in the ISA's format (\texttt{8L}, \texttt{AL}, \texttt{C0} then value or flags); the handshakes match a reference arbiter that serves A, B and the flags in turn; no source waits behind more than two other messages; every link event is reported in exactly one flags message & PDR & 10\,s \\
+\sig{entry\_dispatch} & With the real frame buffer: every committed entry leaves exactly once, unchanged and in order, on the right port; at most one entry in flight and no idle clock while one is waiting; wire entries are discarded only between a flush and the next status entry; each status entry raises \sig{frame\_mark} exactly once & PDR & 33\,s \\
+\sig{start\_router} & Against the ISA's ordering rule: headers from 1, the first unconfigured one ends the list, headers outside the group skipped; with in-order success, at most one running block waits, and MAIN starts exactly when all have succeeded & PDR & 1\,s \\
+\sig{first\_counter} & START end to end from the instruction: with \sig{VALUE} aligned as the control unit aligns it, succeeds exactly when the last \sig{CYC} bits on its own pin equal \sig{VALUE} in the chain's order; the condition START; the write START; the value reported to the host and BRANCH is \sig{VALUE} as a plain number; push and its length & PDR & 11\,s \\
+\sig{header\_counter} & Bit-by-bit compare in the chain's order, \sig{fail} on the first wrong bit and on no other clock; ANY returns the received field as a plain number; SEEK waits for the first bit without failing; write headers push at once; success and push timing & PDR & 3\,s \\
+\sig{main\_counter} & Reading: each bit taken on a tick comes back once, in its place, in host entries of 8 bits with a short last one, and the frame completes on the \sig{BITS}-th bit. Writing: the bits of the host entries go out in order, split at frame ends with the rest carried to the next frame, exactly \sig{BITS} per frame. \sig{BITS} from 1 to 65,535 & k-induction & 8\,s \\
+\sig{end\_counter} & Succeeds on exactly the tick where the last \sig{LEN} bits equal \sig{PATTERN} in the chain's order, not before \sig{LEN} bits; \sig{LEN} above 16 behaves as 16 & PDR & 37\,s \\
+\sig{watchdog} & Fires exactly \sig{WDOG} quiet clocks (busy, no tick, no frame reset) after the last activity or the last timeout, repeats while the frame stays stalled, never with a limit of 0. Full 16-bit range & k-induction & 1\,s \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Every proof has a \sig{cover} task that reaches its interesting cases, for example a received byte at the smallest ratio, an END pattern of 16 bits, a source that waited behind two messages, a flushed wire entry discarded, and a tracked bit that is the last of a short final byte. All covers are reached, so no proof passes because its assumptions left nothing to check.
+
+The times are wall-clock for the prove and cover tasks together, from one run of \sig{scripts/formal.sh} on a two-core machine that was also running the mutation campaign; all sixteen proofs took 12 minutes in that run, the CRC unit's 7 of them. The long tasks add about 15 minutes for \sig{uart\_rx} over ratios 2 to 7, and about 2 minutes for the return path's bounded pin check (50 clocks, at most 2 clocks per bit, so two whole messages fit).
+
+\paragraph{What the receiver proof shows about the host link.} In v0.7.1, \sig{uart\_rx} was proved for 2 to 4 clocks per bit by default and 2 to 7 in the wide task, on a 4-bit build of the ratio, and failed at 1 clock per bit: the half-bit wait in START, \sig{(ratio >> 1) - 1}, wrapped round. v0.7.2 skips that wait at 1 clock per bit, and the proofs now start at 1: 1 to 4 by default, 1 to 7 in the wide task. PDR's run time grows quickly with the ratio, so the proof does not cover all 15 values the narrow build can measure. The receiver does nothing different at higher ratios: the same comparisons with \sig{ratio - 1} and \sig{ratio >> 1}, which is also what the pin-level tests run at 16, 7 and now 1 clock per bit. The proofs use an exact host clock; tolerance to a host running 2\,\% fast or slow is checked by \sig{t\_uart}, not proved.
+
+\begin{table}[h]
+\centering\small
+\begin{tabularx}{\linewidth}{@{}l L L@{}}
+\toprule
+Harness & Assumes & Discharged by \\
+\midrule
+\sig{control\_unit} & \sig{rx\_valid} never on two consecutive clocks (the decoder ignores a byte on its EXECUTE clock) & \sig{uart\_rx}, any pin \\
+\sig{first\_counter} & \sig{VALUE} aligned by bit order as the control unit does it & \sig{control\_unit} (\sig{cfg\_compare} for START) \\
+\sig{return\_path} & A channel holds its entry steady until it is taken & \sig{entry\_dispatch} (held, unchanged, until routed) \\
+\sig{return\_path} & Bytes accepted by \sig{uart\_tx} appear exactly on the pin & \sig{uart\_tx}; bounded end to end by the \sig{line} task \\
+\sig{main\_counter} & The host FIFO's head stays until popped & \sig{host\_fifo} \\
+\sig{main\_counter} & No byte completes while the last one waits and the buffer is not free & Frame chain wiring: \sig{fifo\_free} is low only for a one-clock block push. Read from the code, not proved \\
+\sig{main\_counter} & MAIN not rewritten while enabled; a read MAIN loses its enable only at a frame boundary; no abort on the clock a wire entry leaves & ISA (configure between frames) and frame chain behaviour. Read from the code, not proved \\
+\sig{end}, \sig{first}, \sig{header}, \sig{main} & Bit order steady while the block is configured & ISA: \sig{ORDER} comes before the blocks \\
+\sig{header\_counter} & \sig{CYC} 1 to 8 & ISA, not enforced (Section~\ref{sec:flags}) \\
+\sig{uart\_tx} & The UART ratio is constant & No longer assumed in v0.7.2: the UART takes the divider per frame, and the proof lets it change on any clock (Section~\ref{sec:fixes}) \\
+\bottomrule
+\end{tabularx}
+\caption{Every assumption in the new harnesses, and the one in an existing harness that mutation testing exposed, with what discharges each.}\label{tab:assume}
+\end{table}
+
+\section{Mutation testing: how far the proofs can be trusted}\label{sec:mutation}
+
+\paragraph{Method.} \sig{scripts/mutate.py} uses Yosys's \sig{mutate} pass, the method of YosysHQ's \emph{mcy}. For each proof it picks 16 faults evenly over the module under test: a signal bit stuck at 0 or 1, inverted, or replaced by another bit, at a cell's input or output. The pass covers adders, comparators, multiplexers and registers alike. Each fault is then classified:
+\begin{enumerate}
+\item \textbf{Killed:} the harness, run on the faulty design as a bounded check, fails an assertion of the spec (helper invariants left out). If the bounded check passes but the fault does change behaviour (step 2), the unbounded proof is run on it too, and a failure there also counts as killed.
+\item \textbf{Equivalent:} the faulty module is proved equal to the original on every output for ever (PDR on a miter of the two). Such a fault cannot be seen and does not count against the proof. A typical one sits on a bit that is always masked off.
+\item \textbf{No effect within the depth:} PDR did not finish the equivalence, and no difference shows within the bounded depth.
+\item \textbf{Gap:} the fault changes behaviour and the proof still passes. This is the number that matters: a property missing from the spec.
+\item \textbf{Unresolved:} the fault changes behaviour, but neither the bounded check nor the unbounded proof decides within the time limit.
+\end{enumerate}
+The score is killed / (killed + gap + unresolved): the share of behaviour-changing faults the proof is shown to catch. The unmutated design is run through the same bounded check first, so that a failure there cannot be mistaken for a kill.
+
+\paragraph{Results.} The campaign ran on v0.7.1, the design this edition first verified. After the v0.7.2 corrections the transmitter's campaign was repeated (see its row in the review below).
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}L r r r r r r r@{}}
+\toprule
+Proof & Faults & Killed & Equivalent & No effect$^*$ & Survived & Unresolved & Score \\
+\midrule
+\sig{host\_fifo} & 15 & 15 & 0 & 0 & 0 & 0 & 100\,\% \\
+\sig{frame\_buffer} & 15 & 15 & 0 & 0 & 0 & 0 & 100\,\% \\
+\sig{uart\_tx} & 15 & 11 & 3 & 0 & 1 & 0 & 92\,\% \\
+\sig{branch\_unit} & 15 & 14 & 1 & 0 & 0 & 0 & 100\,\% \\
+\sig{crc\_unit} & 7 & 7 & 0 & 0 & 0 & 0 & 100\,\% \\
+\sig{line\_codec} & 7 & 2 & 0 & 0 & 5 & 0 & 29\,\% \\
+\sig{uart\_rx} & 14 & 9 & 2 & 0 & 0 & 3 & 75\,\% \\
+\sig{control\_unit} & 15 & 15 & 0 & 0 & 0 & 0 & 100\,\% \\
+\sig{return\_path} & 15 & 14 & 1 & 0 & 0 & 0 & 100\,\% \\
+\sig{entry\_dispatch} & 15 & 15 & 0 & 0 & 0 & 0 & 100\,\% \\
+\sig{start\_router} & 15 & 15 & 0 & 0 & 0 & 0 & 100\,\% \\
+\sig{first\_counter} & 15 & 13 & 0 & 1 & 1 & 0 & 93\,\% \\
+\sig{header\_counter} & 15 & 14 & 0 & 0 & 1 & 0 & 93\,\% \\
+\sig{main\_counter} & 7 & 3 & 0 & 0 & 0 & 4 & 43\,\% \\
+\sig{end\_counter} & 15 & 15 & 0 & 0 & 0 & 0 & 100\,\% \\
+\sig{watchdog} & 11 & 9 & 0 & 0 & 0 & 2 & 82\,\% \\
+\midrule
+All & 211 & 186 & 7 & 1 & 8 & 9 & 91.6\,\% \\
+\bottomrule
+\end{tabularx}
+\end{center}
+{\small $^*$ No visible effect within the bounded depth; PDR did not finish the equivalence proof.}
+
+Sixteen faults per proof were planned. Four harnesses are expensive to unroll, so they ran fewer: \sig{main\_counter} and \sig{line\_codec} 8 each, the watchdog 12. The CRC unit was not completed: its bounded baseline did not finish in 40 minutes, because the bit-by-bit reference CRC unrolls badly, and the PDR kill mode the script now offers for it was not run to the end. (\sig{-mode none} counts as one of the requested faults, so 16 requested gives 15 real ones.) The seven equivalent faults were each proved, by PDR on a miter, to change nothing at the outputs. A typical one forces a bit to 1 that is already the constant 1.
+
+Every fault that was not killed was then looked at by hand. Without that review, the score would understate some proofs and overstate none.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}l c L@{}}
+\toprule
+Proof & Faults & Review \\
+\midrule
+\sig{header\_counter}, \sig{first\_counter} & 1 + 1 survived & Bit 4 of the cycle count or bit counter. It only matters for a count of 16 or more, and the control unit always sends \sig{\{4'd0, CYC\}}, so it cannot happen in the chip. Not a gap. \\
+\sig{uart\_rx} & 3 unresolved & In the captured ratio and the half-bit compare, visible only at 8 or more clocks per bit, which is above the range the proof covers (2 to 7 when the campaign ran on v0.7.1; 1 to 7 in v0.7.2). They mark the range limit stated in Section~\ref{sec:new}, not a missing property. \\
+\sig{watchdog} & 2 unresolved & A limit of 0 that still counts, and counter bit 14 stuck at 0. Both show only after more than 16,000 clocks, so neither the bounded check nor PDR without the helper invariants finished. The full proof, as CI runs it, rejects both in under a second. \\
+\sig{uart\_tx} & 1 survived & Bit 2 of the bit counter, rewired. With a steady ratio the counter still takes 8 steps, so the frame is the same; it differs only when \sig{clk\_ratio} changes mid-frame, which the proof assumed never happens. In the chip it can: that is finding 7, fixed in v0.7.2, where the proof no longer makes the assumption. A fresh campaign on the v0.7.2 transmitter: 15 faults, 12 killed, 3 proved equivalent, none surviving. \\
+\sig{main\_counter} & 4 unresolved & Three are in the acknowledge path and the \sig{listening} output, which the MAIN harness ties off or does not check (Section~\ref{sec:limits}). The fourth was a \textbf{real gap in the new harness}: it corrupted bit 7 of the mask that clears stale bits above a short last byte, and the proof only checked the bits inside each entry's length. The harness now also proves that every entry is zero above its length, in both directions. The strengthened proof passes on the RTL and fails on that fault. \\
+\sig{line\_codec} & 5 survived & In the receive strobe, bit unstuffing, the generated clock's idle level, the END tick select and a receive register. The line codec proof covers entry accounting and output enables only, not what is sent or sampled. This is the clearest measure in the table of how narrow a proof is: it says nothing about the line codec's data path, which the pin-level tests cover. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+After review, of the faults that change behaviour in the chip, the only ones a proof lets through are where its stated scope ends: the line codec's data path and MAIN's acknowledge mode. One weakness in a new harness was found and closed, and one assumption in an existing harness turned out not to hold in the chip. Inside its stated scope, every proof caught every fault that can occur in the chip.
+
+\paragraph{What the score does and does not say.} A high score says the assertions are strong: almost any change to the logic that can be seen at the block's outputs breaks one. It does not say the reference model reads the ISA correctly, because a misreading shared by the RTL and the harness would survive every mutation. That is why the pin-level tests decode the waveforms with sigrok's independent decoders (Part~\ref{part:signoff}). Mutations are also single faults in the block under test: a fault in the surrounding blocks, or two faults that cancel, is outside this measure.
+
+\section{Findings}\label{sec:flags}
+
+These were found on v0.7.1, with the RTL frozen, and recorded for a decision. None of them affects a standard in the guide or the instruction bytes the host library sends. Section~\ref{sec:fixes} gives what v0.7.2 does about each.
+
+\begin{enumerate}
+\item \textbf{Auto-baud needs at least 2 clocks per bit.} At 1 clock per bit, \sig{(ratio >> 1) - 1} in \sig{uart\_rx}'s START state wraps round, the receiver waits a whole 16-bit count, and every byte is wrong (counterexample from the proof). That is a host at the full clock rate, 50\,Mbaud, which no host here can produce; 2 clocks per bit (25\,Mbaud) is proved. Worth one line in the ISA's auto-baud paragraph.
+\item \textbf{The control unit drops a byte that arrives on its EXECUTE clock.} It is safe because \sig{uart\_rx} never delivers bytes on consecutive clocks, now proved. It would matter only if the instruction source changed, for example a faster parallel interface.
+\item \textbf{\sig{HDR} and END lengths outside the ISA's range are not rejected.} \sig{HDR} with \sig{CYC} 0 or 9 to 15, and END with \sig{LEN} 0, raise no \sig{cmd\_error}. A header with \sig{CYC} 0 succeeds only after its 8-bit counter wraps round (256 bits); END with \sig{LEN} 0 matches on its first tick; START with \sig{CYC} 9 to 15 waits for \sig{CYC} bits and compares the last 8. The host library never sends these. A \sig{cmd\_error} for them would make a wrong program visible.
+\item \textbf{MAIN can raise \sig{complete} on the clock of an abort.} If the last bit of a read frame is taken on the same clock as an abort (a timeout pulse together with the next tick, a line error on the last bit), MAIN reports \sig{complete} and the frame chain reports both: status bits 0 and 1 set together, and the frame's entries rolled back as for an abort. The host should treat bit 1 as winning. A directed test of this corner is worth adding.
+\item \textbf{A read byte that cannot leave would be overwritten.} If the frame buffer refused MAIN for a whole byte, MAIN would replace the waiting byte with the new one, so the older byte would be lost, not the newer. In the chain this cannot happen: MAIN's \sig{fifo\_free} is low only for one clock while a block pushes, and a full frame buffer drops the entry at its own input and sets the overflow bit, as the ISA says. Recorded because the guarantee rests on the frame chain's wiring, not on MAIN.
+\item \textbf{A branch abort can drop MAIN's last completed byte.} An abort clears a byte MAIN has completed but not yet handed over. For an ordinary abort the whole frame is rolled back, so nothing changes. A branch abort keeps the values captured so far, so a byte completed on the clock before a branch abort would be missing. In the guide's programs no rule can fire while a read MAIN runs (rules watch START and the headers, the read-back during writes, or the CRC result after the frame), so this is not reached. Worth knowing if a rule is ever used in the middle of a read MAIN.
+\item \textbf{Rewriting \sig{LINK} while the return link is sending garbles the byte in flight.} \sig{tx\_ratio} is \sig{LINK}'s divider, used live by \sig{uart\_tx}. If it drops below the bit counter's current value mid-bit, \sig{clkCount == clk\_ratio - 1} is missed and the bit lasts until the 16-bit counter wraps, up to 65,536 clocks (1.3\,ms); the rest of that message is then sent at the new rate. \sig{uart\_tx\_formal} assumes a constant ratio, so it never covered this; a mutation of \sig{uart\_tx}'s bit counter that only shows when the ratio changes mid-frame survived it, and that is how this was found. The host should send \sig{LINK} only while nothing is being returned, for example straight after auto-baud, and the ISA's \sig{LINK} paragraph should say so. A fix, if wanted later, is to take the new divider only in \sig{uart\_tx}'s IDLE state.
+\end{enumerate}
+
+\section{Corrections in v0.7.2}\label{sec:fixes}
+
+Five of the seven findings are fixed in the RTL. Each fix is local, adds no instruction or field, and leaves every program the host library builds unchanged; together they add 34 cells after synthesis (19,003). The other two need no change: item 2 is safe by a proved property of \sig{uart\_rx}, and item 5 cannot happen in the chain.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{@{}l L L@{}}
+\toprule
+Finding & Change & How it is verified \\
+\midrule
+7: \sig{LINK} mid-byte & \sig{uart\_tx} takes \sig{clk\_ratio} into \sig{frameRatio} when a frame starts and counts against that & \sig{uart\_tx\_formal} now leaves the ratio free on every clock and checks each frame against the value at its start. The v0.7.1 \sig{uart\_tx} fails this proof; v0.7.2 passes \\
+1: auto-baud at 1 clock per bit & At 1 clock per bit \sig{uart\_rx} goes from IDLE straight to RECEIVE, skipping the half-bit wait & \sig{uart\_rx\_formal} proves ratios 1 to 4 (wide task 1 to 7); \sig{t\_control} now also runs at 1 clock per bit, end to end \\
+3: lengths out of range & The control unit raises \sig{cmd\_error} and does not write the block for START \sig{CYC} 9--15, HDR \sig{CYC} 0 or 9--15, END \sig{LEN} 0 or 17--31 & The reference decoder in \sig{control\_unit\_formal} has the ISA's ranges; a new \sig{t\_control} check sends all four cases and sees the flag \\
+4: complete with abort & The frame chain's \sig{complete} is masked by \sig{abort}, so abort wins and the status never has both bits & Pin-level suite (every status checked by value); the MAIN proof keeps checking MAIN's own \sig{complete} \\
+6: branch abort drops a byte & MAIN has a new input, \sig{keep\_pending}, driven by \sig{branch\_abort}; on a branch abort the finished byte still waiting is kept and sent & \sig{main\_counter\_formal} takes \sig{keep\_pending} free and proves the kept byte, full or short, comes out intact and only the partial byte is dropped; a cover reaches a short kept byte \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+The fixed transmitter also removes the one assumption in Table~\ref{tab:assume} that did not hold in the chip. The design reference and the toolchain guide have been brought up to date with the sixteen proofs and v0.7.2.
+
+\section{What the proofs still do not cover}\label{sec:limits}
+
+\begin{itemize}
+\item \textbf{The integration.} \sig{frame\_chain}, \sig{emulator\_channel} and \sig{protocol\_emulator} are not proved as a whole: their state space, two channels with sixteen-entry buffers and 16-bit counters, is far beyond an unbounded proof. They are covered by the pin-level suite, the randomised programs, sigrok and 98.7\,\% line coverage. Several assumptions in Table~\ref{tab:assume} rest on reading the frame chain and are the natural next step: a bounded proof of the frame chain with these assumptions turned into assertions.
+\item \textbf{MAIN's acknowledge, wait-for-END and follow modes.} The MAIN proof ties \sig{ACK}, \sig{WE} and \sig{DIR} = follow off; it covers plain read and write frames. The I\textsuperscript{2}C acknowledge, the 10BASE-T and USB frames that end on END, and follow are checked at the pins only. Mutation testing shows it: two of the MAIN faults left unresolved sit in the acknowledge path.
+\item \textbf{The line codec's bit timing.} The line codec proof covers entry accounting and the output enables, not when each bit goes out or where it is sampled. That is checked at the pins by every standards test.
+\item \textbf{Size.} The FIFOs and buffers are proved at 4 entries, the UARTs on a 4-bit ratio, the CRC unit and branch unit at the chip's widths. The logic of each is the same at any size; that is argued, not proved.
+\item \textbf{The tools.} A proof is only as sound as Yosys, SymbiYosys, ABC and yices. Two solvers (PDR and k-induction with yices) are used, and every proof also has a cover task that must produce a real trace, so a tool that proved everything would show up. The proofs here were run on Yosys 0.33 with the matching SymbiYosys; the GitHub workflow uses the current OSS CAD Suite. The k-induction harnesses were also run on Yosys 0.71 (\sig{yowasp}) and pass.
+\item \textbf{The gates.} Every proof is on the RTL. The netlist is checked by gate-level simulation of the cocotb suite and by LVS, not by an equivalence proof.
+\end{itemize}
+
+\section{Running it}
+
+\begin{lstlisting}
+bash scripts/formal.sh                  # 16 proofs, prove and cover
+FORMAL_DEEP=1 bash scripts/formal.sh    # also the two long tasks
+cd formal && sby -f main_counter.sby    # one proof, all its tasks
+python3 scripts/mutate.py               # mutation testing, every proof (hours)
+python3 scripts/mutate.py watchdog -n 8 # one proof, 8 faults; see build/mutate/
+\end{lstlisting}
+
+A failing proof leaves a counterexample in \sig{formal/<name>\_prove/engine\_0/trace.vcd}; a surviving mutation leaves its \sig{.sby} and trace in \sig{build/mutate/<name>/}.
+
+\part{Sign-off of v0.7.1 (first edition)}\label{part:signoff}
+
+The sections below are the results of 17 October, unchanged. The RTL they were run on is the RTL above, apart from the header comments.
 
 \section{Bugs found and fixed}
 
@@ -229,7 +431,7 @@ That is 1,344 of 1,361 points, 98.7\,\% (Verilator rounds the percentage down). 
 \item the reply step skipped because its condition is false (for example, a reply set to "only on good CRC" after a bad frame);
 \item the return path serving global flags right after channel B while channel B is idle.
 \end{itemize}
-None of them changes how the chip behaves for a standard in the guide. The first coverage run also flagged BRANCH rule 1, SPI modes 1 to 3 and NOP; \sig{t\_modes} now covers them, and that is how the hold-time bug above was found.
+None of them changes how the chip behaves for a standard in the guide. The first coverage run also flagged BRANCH rule 1, SPI modes 1 to 3 and NOP; \sig{t\_modes} now covers them, and that is how the hold-time bug above was found. The last point in the list, the return path serving the flags after channel B while B is idle, is now reached by the return path proof's cover task, and the proof checks the arbitration for every order of requests.
 
 \section{Formal proof of the line codec}
 
@@ -239,9 +441,9 @@ None of them changes how the chip behaves for a standard in the guide. The first
 \item once the select output has been inactive for three clocks, every accepted entry has had exactly one \sig{tx\_done}, including entries dropped by any pattern of cancels;
 \item with \sig{DRIVE} = \texttt{00} no output enable is ever set; with open drain the data and clock outputs only pull low; the clock output is only enabled while the codec generates the clock.
 \end{itemize}
-\sig{abc pdr} proves this unbounded in about 20\,s; the cover task reaches a double drop, a Manchester entry and an I\textsuperscript{2}C entry. It joins the five earlier proofs: both FIFOs, the UART transmitter, the branch unit and the CRC unit.
+\sig{abc pdr} proves this unbounded in about 20\,s; the cover task reaches a double drop, a Manchester entry and an I\textsuperscript{2}C entry. It joined the five earlier proofs: both FIFOs, the UART transmitter, the branch unit and the CRC unit.
 
-\section{What is left}
+\section{What was left on 17 October}
 
 \begin{itemize}
 \item \textbf{The GitHub run.} Push and let the \sig{gds} workflow repeat the hardening above and run the Tiny Tapeout precheck, which includes the full KLayout CMOS5L DRC that the local run skips.
@@ -250,13 +452,13 @@ None of them changes how the chip behaves for a standard in the guide. The first
 \item \textbf{Limits that stay.} A generated clock needs \sig{DIV} $\ge$ 4 (as the ISA says), because input pins arrive three clocks late. \sig{t\_modes} runs at 3 to show the margin; at 2, CPHA 1 reads fail as expected.
 \end{itemize}
 
-\section{Running it all}
+\section{Running the sign-off checks}
 
 \begin{lstlisting}
 bash scripts/lint.sh                     # Verilator -Wall
 bash scripts/run.sh                      # every pin-level test, then synthesis
 cd test && make && cd ..                 # cocotb, RTL
-bash scripts/formal.sh                   # six proofs (OSS CAD Suite)
+bash scripts/formal.sh                   # sixteen proofs (OSS CAD Suite)
 bash scripts/coverage.sh                 # Verilator coverage, report in build/cov
 python3 scripts/sigrok_check.py          # needs sigrok-cli and build/t_standards
 PDK_ROOT=~/IHP-Open-PDK bash scripts/synth_ihp.sh typ_1p20V_25C

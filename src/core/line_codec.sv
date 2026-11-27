@@ -7,7 +7,9 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: The channel's line interface: tick source (clock pin, bit timer or generated clock), decoder and encoder for
+// NRZ, NRZI, Manchester, bit stuffing and I2C conditions, and the pad drive and read-back check. It answers every entry it
+// accepts with exactly one tx_done.
 // =============================================================================
 
 module line_codec (
