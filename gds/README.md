@@ -11,49 +11,54 @@ relates to the Jane Street protocol emulator challenge, and its power and perfor
 
 ## Current state: 8 x 4 tiles, ISA v0.7.2
 
-From v0.7.2 (26 November 2026) the project is set to **8 x 4 tiles** in `info.yaml`. The layout is
-built by the `gds` GitHub workflow on every push, with the Tiny Tapeout CMOS5L flow (template
-branch `cmos5l`, LibreLane 3.1.0.dev3, IHP-Open-PDK `2bbec755`) on IHP SG13CMOS5L 130 nm at
-50 MHz. To update this folder after a green run:
+This is the layout of ISA v0.7.2 on **8 x 4 tiles**, built by the `gds` GitHub workflow on
+27 November 2026 (commit `ae707b7`, 2 h 13 min) with the Tiny Tapeout CMOS5L flow (LibreLane
+3.1.0.dev3, IHP-Open-PDK) on IHP SG13CMOS5L 130 nm at 50 MHz. Timing is met at all three corners,
+routing, DRC, antenna and LVS are clean, and the gate-level cocotb tests pass on the routed
+netlist. The chip has not been fabricated yet.
 
-1. Open the `gds` run on GitHub and download its `tt_submission` artifact.
-2. Copy `tt_um_vertrex_star_proem.gds` and `tt_um_vertrex_star_proem.lef` from its `tt_submission/`
-   folder into this folder, replacing the 6 x 4 files of v0.7.1.
-3. Fill in the place-and-route figures below from the `GDS_logs` artifact
-   (`runs/wokwi/final/metrics.json`): cells, utilisation, slack at each corner, power.
-4. Replace `images/layout_full.png` with the `gds_render` artifact's picture.
+v0.7.2 is v0.7.1 plus the five corrections from the second verification round (range checks on
+START, HDR and END lengths, a LINK divider taken per byte, auto-baud from 1 clock per bit, abort
+winning over complete, and a branch abort keeping MAIN's last finished byte).
 
-The design is ISA v0.7.2: v0.7.1 plus the five corrections from the second verification round
-(range checks on START, HDR and END lengths, a LINK divider taken per byte, auto-baud from 1
-clock per bit, abort winning over complete, and a branch abort keeping MAIN's last finished byte).
-The chip has not been fabricated yet.
-
-| | 8 x 4, v0.7.2 | 6 x 4, v0.7.1 (14 October, last routed layout) |
+| | 8 x 4, v0.7.2 (27 November) | 6 x 4, v0.7.1 (14 October) |
 | --- | --- | --- |
 | Top module | `tt_um_vertrex_star_proem` | same |
 | Process | IHP SG13CMOS5L 130 nm (Metal1 to Metal4 plus TopMetal1) | same |
-| Die | 1724.16 x 710.64 um = 1,225,262 um² | 1289.28 x 710.64 um = 916,214 um² |
-| Core (area available for cells) | 1,208,173 um² | 902,417 um² |
-| Cells after synthesis | 19,003 (301,423 um², LibreLane synthesis of v0.7.2) | 18,969 |
-| Cells after place and route | from the `gds` run | 25,612, not counting fill |
-| Utilisation | about 32 % expected | 43 % |
-| Clock | 50 MHz; timing from the `gds` run | 50 MHz; met at every corner (3.8 ns to spare at the slow corner) |
-| Power | from the `gds` run; expected close to 10 mW | about 10.2 mW |
-| Checks | the `gds`, `precheck` and `gl_test` jobs | Magic DRC 0 errors, LVS clean, precheck passed locally |
+| Die | 1724.16 x 710.64 um = 1,225,260 um² | 1289.28 x 710.64 um = 916,214 um² |
+| Core (area available for cells) | 1,208,170 um² | 902,417 um² |
+| Cells after synthesis | 19,003 | 18,969 |
+| Cells after place and route | 26,061, not counting 76,186 fill cells | 25,612 |
+| Utilisation | 32.4 % | 43 % |
+| Clock | 50 MHz; met at every corner, 4.44 ns to spare at the slow corner | 50 MHz; met at every corner, 3.84 ns to spare |
+| Power | 10.4 mW (typical corner) | 10.2 mW |
+| Routing | 0 DRC violations after 5 iterations, 0 antenna violations (33 diodes), 0.995 m of wire | 0 violations, 1.15 m of wire |
+| Checks | Magic DRC 0 errors, LVS clean, gate-level tests pass | Magic DRC 0 errors, LVS clean, precheck passed locally |
 
-The 8 x 4 die gives the same logic a third more area, so placement and routing are easier and the
-slow-corner margin should not shrink. The v0.7.2 changes add 34 cells after synthesis.
+With a third more area the same logic spreads out more easily: the router needs 14 % less wire,
+and the slow-corner margin grows from 3.84 ns to 4.44 ns.
 
-Where the cell area went in the 6 x 4 layout of v0.7.1, as a guide to the 8 x 4 one:
+Where the cell area went (8 x 4, v0.7.2):
 
 | Cell class | Count | Area (um²) | Share |
 | --- | ---: | ---: | ---: |
-| Flip-flops | 2,763 | 135,356 | 35 % |
-| Combinational logic | 15,323 | 158,486 | 41 % |
-| Timing repair buffers (most of them fix hold time) | 6,104 | 78,850 | 20 % |
-| Clock tree | 362 | 6,984 | 2 % |
-| Inverters, buffers, antenna diodes | 1,060 | 5,810 | 2 % |
-| **Total** | **25,612** | **385,486** | **100 %** |
+| Flip-flops | 2,785 | 136,434 | 35 % |
+| Combinational logic | 15,765 | 163,047 | 42 % |
+| Timing repair buffers (most of them fix hold time) | 6,175 | 79,309 | 20 % |
+| Clock tree | 416 | 7,918 | 2 % |
+| Inverters, buffers, antenna diodes | 920 | 5,048 | 1 % |
+| **Total** | **26,061** | **391,756** | **100 %** |
+
+The flow also reports max-slew warnings (205 pins at the typical corner, 1,010 at the slow corner,
+worst 1.68 ns against a 0.75 ns limit) and 203 max-fanout warnings. They are design-rule warnings,
+not timing failures: timing analysis already includes the slow transitions and is met at every
+corner, and the flow passes. The pins are on high-fanout nets, driven by the buffers the flow adds
+to split fanout. The first edition did not record these counts for v0.7.1, so there is no
+comparison; a tighter `MAX_FANOUT_CONSTRAINT` in `src/config.json` would reduce them if wanted.
+
+To refresh this folder after another `gds` run: download the run's `tt_submission` artifact and
+copy `tt_um_vertrex_star_proem.gds` and `.lef` from its `tt_submission/` folder here; the figures
+are in `runs/wokwi/final/metrics.json` in the `GDS_logs` artifact.
 
 ## Jane Street challenge
 
@@ -71,9 +76,9 @@ build the GDS and run the precheck; a submission needs a passing GDS build.
 | Stretch: 10 Mbit Ethernet | Receive (Manchester decoded on chip); transmit needs a 40 or 60 MHz clock |
 | Extra | PS/2; SWD-style acknowledge handling; CAN-style arbitration; two channels at once; auto-baud host link |
 | Programmability | Frames described in instruction bytes, plus `BRANCH` rules that change a frame's direction or abort it from a received field or a read-back mismatch |
-| Area | 8 x 4 tiles, as the updated rules allow; about 32 % expected utilisation (v0.7.1 fitted the original 6 x 4 at 43 %) |
+| Area | 8 x 4 tiles, as the updated rules allow; 32.4 % utilisation (v0.7.1 fitted the original 6 x 4 at 43 %) |
 | Process: CMOS5L | Built on the CMOS5L template; the `gds` workflow uses the same flow |
-| Full RTL to GDS with timing closure | v0.7.1 at 6 x 4: done, met at every corner. v0.7.2 at 8 x 4: from the `gds` workflow |
+| Full RTL to GDS with timing closure | Done: v0.7.2 at 8 x 4 meets timing at every corner, with DRC, antenna and LVS clean |
 | Verification | Pin-level tests for every standard, including 16 more in `t_standards`; 1,800 random programs; 600 random branch programs; cocotb on RTL and gate level; a second simulator (Verilator) with 98 % line coverage; sigrok decoding of the standards waveforms; sixteen formal proofs covering every block, with mutation testing of each |
 
 How it differs from the brief: the brief describes a tiny CPU running firmware. ProEm lets the
@@ -86,33 +91,32 @@ Tapeout submission.
 
 ## Power
 
-Estimated by OpenROAD on the routed 6 x 4 layout of v0.7.1, with extracted wiring, at 50 MHz. The
-8 x 4 layout has the same flip-flops and clock tree size, so it should be close; the `gds` run
-gives the new figure.
+Estimated by OpenROAD on the routed 8 x 4 layout, with extracted wiring, at 50 MHz.
 
 | Corner | Flip-flops | Logic | Clock tree | Total |
 | --- | ---: | ---: | ---: | ---: |
-| Typical: 1.20 V, 25 °C | 7.37 mW | 0.35 mW | 2.48 mW | **10.2 mW** |
-| Slow: 1.08 V, 125 °C | 5.87 mW | 0.28 mW | 1.92 mW | 8.1 mW |
-| Fast: 1.32 V, -40 °C | 8.99 mW | 0.45 mW | 3.24 mW | 12.7 mW |
+| Typical: 1.20 V, 25 °C | 7.50 mW | 0.29 mW | 2.64 mW | **10.4 mW** |
+| Slow: 1.08 V, 125 °C | 5.98 mW | 0.24 mW | 2.03 mW | 8.3 mW |
+| Fast: 1.32 V, -40 °C | 9.13 mW | 0.38 mW | 3.49 mW | 13.0 mW |
 
-* About 8.5 mA from the 1.2 V core supply; leakage is about 0.04 mW.
-* About 96 % of the power is the clock reaching the flip-flops; the logic itself uses about 4 %.
+* About 8.7 mA from the 1.2 V core supply; leakage is about 0.05 mW.
+* About 97 % of the power is the clock reaching the flip-flops; the logic itself uses about 3 %.
   Idle and busy power are therefore nearly the same.
 * This is a vectorless estimate (default switching rates).
+* v0.7.1 on 6 x 4 was 10.2 mW typical: the same flip-flops and clock, so nearly the same power.
 
 ## Performance
 
-Timing after routing of the 6 x 4 layout of v0.7.1, at a 50 MHz (20 ns) clock. The `gds` run
-gives the 8 x 4 figures.
+Timing after routing of the 8 x 4 layout, at a 50 MHz (20 ns) clock.
 
 | Corner | Setup slack | Hold slack | Maximum clock |
 | --- | ---: | ---: | ---: |
-| Typical: 1.20 V, 25 °C | 9.8 ns | 0.29 ns | 98 MHz |
-| Slow: 1.08 V, 125 °C | 3.8 ns | 0.61 ns | 62 MHz |
-| Fast: 1.32 V, -40 °C | 12.4 ns | 0.10 ns | 131 MHz |
+| Typical: 1.20 V, 25 °C | 10.2 ns | 0.27 ns | 102 MHz |
+| Slow: 1.08 V, 125 °C | 4.44 ns | 0.59 ns | 64 MHz |
+| Fast: 1.32 V, -40 °C | 12.8 ns | 0.10 ns | 138 MHz |
 
-The CMOS5L flow only enforces the typical corner. Details of how the slow corner was closed are in
+The CMOS5L flow only enforces the typical corner; this layout meets all three. v0.7.1 on 6 x 4
+had 9.8, 3.8 and 12.4 ns of setup slack. How the slow corner was first closed is described in
 [docs/verification_report.pdf](../docs/verification_report.pdf).
 
 Protocol speeds at 50 MHz:
@@ -140,34 +144,33 @@ instruction link. Pad and pin multiplexer speed limits for the shuttle have not 
 | Verilator lint (`-Wall`) | Clean, with reviewed waivers | Clean |
 | Pin-level suite (CXXRTL) | All pass, plus auto-baud at 1 clock per bit and the new `cmd_error` range checks | All pass |
 | Formal proofs (SymbiYosys) | Sixteen, all proven; mutation testing in the verification report | Six |
-| Detailed routing, antenna, DRC, LVS, timing | the `gds` and `precheck` jobs | 0 violations; DRC 0 errors; LVS clean; timing met at every corner |
-| cocotb, gate level | the `gl_test` job | 6 of 6 passed |
+| Detailed routing, antenna, DRC, LVS, timing | 0 violations; DRC 0 errors; LVS clean; timing met at every corner (`gds` job) | 0 violations; DRC 0 errors; LVS clean; timing met at every corner |
+| cocotb, gate level | Passed on the routed netlist (`gl_test` job) | 6 of 6 passed |
 
 ## Images of the chip
 
-The pictures in `images/` are of the 6 x 4 layout of v0.7.1. Replace them from the 8 x 4 run: the
-`gds_render` artifact is a picture of the whole block, the `viewer` job publishes a 3D view, and
-KLayout can export close-ups of the new GDS once it is in this folder.
+### Whole block
 
-### Whole block (v0.7.1, 6 x 4)
+![Whole layout, 8 x 4 tiles](images/layout_full.png)
 
-![Whole layout of v0.7.1, 6 x 4 tiles](images/layout_full.png)
-
-1289 x 711 um. Red is the lowest routing metal; yellow and green are the upper routing layers;
-the regular green vertical stripes are the power straps.
+1724 x 711 um, showing the routing metals only: red is Metal1 (with the cells' own wiring),
+blue Metal2, yellow Metal3, green Metal4, and the regular bright green vertical stripes are the
+TopMetal1 power straps. The logic sits on the left two thirds, close to where the Tiny Tapeout
+pins come in; the rest of the core is filler.
 
 ### Close-up
 
-![Close-up of standard cells](images/layout_closeup.png)
+![Close-up of the routing](images/layout_closeup.png)
 
-About 40 x 22 um: rows of standard cells (3.78 um tall) with their internal wiring and the
-routing above them.
+About 40 x 22 um inside the logic: Metal1 underneath, the routing layers above it, and two
+TopMetal1 power straps.
 
 ### Tiny Tapeout style
 
 ![Layout rendered in the Tiny Tapeout style](images/layout_tinytapeout_style.jpg)
 
-The same layout rendered the way the Tiny Tapeout website shows projects.
+The same layout as rendered by the `gds` workflow (`gds_render` artifact), the way the Tiny
+Tapeout website shows projects.
 
 ## Viewing the GDS
 

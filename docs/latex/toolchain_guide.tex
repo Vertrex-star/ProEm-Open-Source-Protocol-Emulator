@@ -836,7 +836,7 @@ The \textbf{resizer} swaps cells for stronger or weaker versions and inserts buf
 
 \begin{itemize}
 \item \textbf{Antennas}: during manufacturing, a long metal wire connected only to a transistor gate can collect charge and damage it. The flow adds small diodes where needed (51 on ProEm).
-\item \textbf{Fill}: empty space is filled with filler and decoupling cells so the chip is uniform to manufacture. Cells covered 43\,\% of the 6 $\times$ 4 core in v0.7.1 and about 32\,\% of the 8 $\times$ 4 core is expected for v0.7.2; the rest is fill, which is why the layout looks full.
+\item \textbf{Fill}: empty space is filled with filler and decoupling cells so the chip is uniform to manufacture. Cells cover 32.4\,\% of ProEm's 8 $\times$ 4 core (43\,\% of the 6 $\times$ 4 core in v0.7.1); the rest is fill, which is why the layout looks full.
 \item \textbf{RC extraction}: the flow calculates the real resistance and capacitance of every wire (the \file{.spef} file) so the final timing check uses real wire delays.
 \end{itemize}
 
@@ -1073,7 +1073,7 @@ Before submitting: push, wait for \cmd{gds}, \texttt{precheck} and \texttt{gl\_t
 \item[STA] Static timing analysis: checking all paths' timing without simulation.
 \item[Synthesis] Turning RTL into a netlist of standard cells (Yosys).
 \item[Tile] The unit of area on a Tiny Tapeout chip (about 202 $\times$ 155\,\textmu m on IHP).
-\item[Utilisation] Share of the core area covered by cells (ProEm: 43\,\% at 6 $\times$ 4 in v0.7.1; about 32\,\% expected at 8 $\times$ 4).
+\item[Utilisation] Share of the core area covered by cells (ProEm: 32.4\,\% at 8 $\times$ 4; 43\,\% at 6 $\times$ 4 in v0.7.1).
 \item[Vacuous proof] A proof that passes only because the situation it talks about can never occur.
 \item[Verilator] Open-source Verilog linter and fast simulator.
 \item[Workflow] A YAML recipe that GitHub Actions runs.
