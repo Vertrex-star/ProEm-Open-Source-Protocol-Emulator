@@ -8,7 +8,8 @@
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
 // Description: Tiny Tapeout top level: maps the chip core onto ui_in, uo_out and the uio pins, with channel A on uio[2:0] and
-// channel B on uio[5:3]. It holds no logic of its own beyond the pin map and the output enables.
+// channel B on uio[5:3]. The host link uses the Tiny Tapeout UART pins (RX on ui_in[3], TX on uo_out[4]), which the demo
+// board's RP2040 connects to its USB serial port. It holds no logic of its own beyond the pin map and the output enables.
 // =============================================================================
 
 module tt_um_vertrex_star_proem (
@@ -47,7 +48,7 @@ logic unused;
 protocol_emulator core (
 	.clk(clk),
 	.rst_n(rst_n),
-	.rx_serial(ui_in[0]),
+	.rx_serial(ui_in[3]),
 	.pin_in(uio_in),
 	.tx_serial(tx_serial),
 	.data_out_a(data_out_a),
@@ -71,9 +72,9 @@ protocol_emulator core (
 	.baud_locked(baud_locked)
 );
 
-assign uo_out = {select_out_b, select_out_a, host_full_b, host_full_a, armed_b, armed_a, baud_locked, tx_serial};
+assign uo_out = {select_out_b, select_out_a, host_full_b, tx_serial, armed_b, armed_a, baud_locked, host_full_a};
 assign uio_out = {2'b00, clock_out_b, pair_out_b, data_out_b, clock_out_a, pair_out_a, data_out_a};
 assign uio_oe = {2'b00, clock_oe_b, pair_oe_b, data_oe_b, clock_oe_a, pair_oe_a, data_oe_a};
-assign unused = &{ena, ui_in[7:1], 1'b0};
+assign unused = &{ena, ui_in[7:4], ui_in[2:0], 1'b0};
 
 endmodule

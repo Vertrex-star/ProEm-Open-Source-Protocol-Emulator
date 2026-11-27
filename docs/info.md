@@ -6,9 +6,10 @@ Images must be under 512 kB each and 1 MB in total.
 ## How it works
 
 ProEm is a programmable protocol emulator. A host (the RP2040 on the Tiny Tapeout demo board, or any
-UART) sends instruction bytes on `ui[0]`; the chip configures two independent channels, A and B, and
+UART) sends instruction bytes on `ui[3]`; the chip configures two independent channels, A and B, and
 then sends and receives frames on the `uio` pins. Received data and a status byte for every frame go
-back to the host on `uo[0]`.
+back to the host on `uo[4]`. These are the Tiny Tapeout UART pins, so the demo board's RP2040 connects
+the link to its USB serial port.
 
 Each channel is a frame chain (START, up to six headers, MAIN, END and a watchdog) behind a line
 codec, so the same hardware speaks UART, SPI (controller in all four modes, and target), I2C
@@ -53,12 +54,12 @@ inputs only.
 
 ## How to test
 
-1. Reset the chip, then send `0x55` on `ui[0]` at 7 or more clocks per bit. `uo[1]`
+1. Reset the chip, then send `0x55` on `ui[3]` at 7 or more clocks per bit. `uo[1]`
    (BAUD_LOCKED) goes high.
 2. UART loopback: connect `uio[3]` to `uio[0]`. Program channel A to receive (`LINE 0 pin 0`,
    `CLOCK ASYNC 16`, `START 0x00` of 1 bit, `MAIN` of 9 bits, `RUN`) and channel B to send
    (`LINE`, `CLOCK ASYNC 16`, `OUT` always, `START` write, `MAIN` write of 9 bits, `DATA 0x48`,
-   `DATA 1`, `RUN`). The bytes come back on `uo[0]` as `{8, 0x48}`, `{1, 1}` and status `0x01`.
+   `DATA 1`, `RUN`). The bytes come back on `uo[4]` as `{8, 0x48}`, `{1, 1}` and status `0x01`.
 3. SPI loopback without any wiring except `uo[6]` to `uio[6]`: channel A generates SCK on pad 2 and
    MOSI on pad 0, and channel B samples pad 0 on the rising edge of pad 2 while pad 6 (A's chip
    select) is low.

@@ -492,21 +492,22 @@ The CMOS5L flow only enforces timing at the typical corner, so \sig{src/config.j
 \toprule
 Pin & Direction & Use \\
 \midrule
-\sig{ui[0]} & in & RX: instructions from the host (first byte \sig{0x55}) \\
-\sig{uo[0]} & out & TX: data and status to the host \\
+\sig{ui[3]} & in & RX: instructions from the host (first byte \sig{0x55}) \\
+\sig{uo[0]} & out & HOST\_FULL for channel A \\
 \sig{uo[1]} & out & BAUD\_LOCKED \\
 \sig{uo[2]}, \sig{uo[3]} & out & ARMED for channels A and B \\
-\sig{uo[4]}, \sig{uo[5]} & out & HOST\_FULL for channels A and B \\
+\sig{uo[4]} & out & TX: data and status to the host \\
+\sig{uo[5]} & out & HOST\_FULL for channel B \\
 \sig{uo[6]}, \sig{uo[7]} & out & SELECT (chip select) for channels A and B \\
 \sig{uio[0]}--\sig{uio[2]} & in/out & pins 0--2, driven by channel A: data, pair, clock \\
 \sig{uio[3]}--\sig{uio[5]} & in/out & pins 3--5, driven by channel B: data, pair, clock \\
 \sig{uio[6]}, \sig{uio[7]} & in & pins 6 and 7 \\
-\sig{ui[7:1]} & in & unused \\
+\sig{ui[2:0]}, \sig{ui[7:4]} & in & unused \\
 \bottomrule
 \end{tabularx}
 \end{center}
 
-The \sig{PIN} fields count the \sig{uio} pads. Every pad is read back through \sig{pin\_in}, so open-drain I\textsuperscript{2}C and the USB pair work on single pads; a channel drives its pads only when \sig{OUT} enables them.
+The host link is on the Tiny Tapeout UART pins, \sig{ui[3]} and \sig{uo[4]}, which the RP2040 on the demo board connects to its USB serial port. The \sig{PIN} fields count the \sig{uio} pads. Every pad is read back through \sig{pin\_in}, so open-drain I\textsuperscript{2}C and the USB pair work on single pads; a channel drives its pads only when \sig{OUT} enables them.
 
 \section{Limits and future work}
 
