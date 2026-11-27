@@ -7,7 +7,9 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: The two BRANCH rules of a chain: each compares a block's value under a mask, or watches a line event (read-back
+// mismatch, CRC result), and keeps the mode, switches to read or write, or aborts the frame. Rule 0 has priority, and each rule
+// acts at most once per frame.
 // =============================================================================
 
 module branch_unit #(

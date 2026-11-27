@@ -28,12 +28,12 @@
 \pagestyle{fancy}
 \fancyhf{}
 \lhead{\small Paul Vincent Bezzina \textbar{} ProEm - Open Source Protocol Emulator}
-\rhead{\small Design reference v1.1}
+\rhead{\small Design reference v1.2}
 \cfoot{\small\thepage}
 
 \title{ProEm: Protocol Emulator ASIC\\\large Design Reference}
 \author{Paul Vincent Bezzina}
-\date{17 October 2026}
+\date{26 November 2026}
 
 \begin{document}
 \maketitle
@@ -42,14 +42,14 @@
 \begin{center}
 \begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}X@{}}
 \toprule
-Process & IHP SG13CMOS5L 130\,nm, through Tiny Tapeout (6 $\times$ 4 tiles) \\
+Process & IHP SG13CMOS5L 130\,nm, through Tiny Tapeout (8 $\times$ 4 tiles) \\
 System clock & 50\,MHz (10BASE-T transmit needs 40 or 60\,MHz) \\
 Channels & 2 independent protocol channels, A and B \\
 Host link & UART in (auto-baud), UART out (rate set by \sig{LINK}) \\
 Standards verified & UART, SPI (controller in all four modes, and target), I\textsuperscript{2}C (controller and target), PS/2, 10BASE-T receive, Manchester transmit, USB low speed receive and transmit with CRC and handshake, SWD-style acknowledge handling, CAN with bit stuffing, arbitration, CRC-15 and acknowledge, and 16 more in the \emph{Standards Programming Guide} (RS-485 to RC5 infrared) \\
-Logic & 18,969 cells after synthesis, 25,612 after place and route (43\,\% of the core) \\
-Timing & met at all three corners after routing; 3.84\,ns setup slack at 1.08\,V, 125\,$^\circ$C (62\,MHz) \\
-Instruction set & ISA v0.7.1 (separate document: \emph{ProEm Instruction Set}) \\
+Logic & 19,003 cells after synthesis (v0.7.2); about 32\,\% of the 8 $\times$ 4 core expected after place and route \\
+Timing & v0.7.1 at 6 $\times$ 4: met at all three corners (3.84\,ns setup slack at 1.08\,V, 125\,$^\circ$C); v0.7.2 at 8 $\times$ 4: from the \sig{gds} workflow \\
+Instruction set & ISA v0.7.2 (separate document: \emph{ProEm Instruction Set}) \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -63,7 +63,7 @@ ProEm is an open-source protocol emulator ASIC. The chip lets an RP2040 speak ma
 
 The design has four parts:
 \begin{enumerate}
-\item \textbf{Host side.} A UART receiver with auto-baud feeds the control unit, which decodes ISA v0.7.1 instructions into registered configuration writes. A return path sends received data, frame status and link events back on a second UART.
+\item \textbf{Host side.} A UART receiver with auto-baud feeds the control unit, which decodes ISA v0.7.2 instructions into registered configuration writes. A return path sends received data, frame status and link events back on a second UART.
 \item \textbf{Input pipeline.} Every input pin passes through two synchroniser flip-flops and one more register before any logic uses it.
 \item \textbf{Two channels.} Each channel has a host FIFO for write data, a \emph{frame chain} that runs the frame, an \emph{entry dispatcher}, and a \emph{line codec} that turns pins into bits and ticks, and bits into pin levels.
 \item \textbf{Outputs.} Each channel drives a data output, a pair output (the complement, for USB D$-$), a clock output and a select output, each with an output enable. Bidirectional pads are read back through the input pins.
@@ -386,11 +386,12 @@ Test & What it checks & Result \\
 \item Timing: the first branch design fed the new mode straight into MAIN in the same clock, adding about 5\,ns to the worst path. The decision is now registered and the chain pauses for one clock.
 \item A second cancel within two clocks of the first, or an entry finishing on the same clock as a pending drop, lost one \sig{tx\_done}; the channel then never listened again until \sig{CLEAR} (found by the line codec proof, v0.7.1).
 \item In SPI modes 1 and 3 the generated-clock path changed the data pin on the device's sampling edge, leaving no hold time; the data is now held through that edge (found through a coverage gap, v0.7.1).
+\item v0.7.2, found by the second verification round (formal proofs and mutation testing): a \sig{LINK} written while the return UART was sending changed the divider mid-byte and could stretch one bit to 65,536 clocks (the UART now takes the divider per byte); auto-baud failed at 1 clock per bit (fixed); \sig{HDR}, \sig{START} and \sig{END} lengths outside the ISA's ranges were accepted (now \sig{cmd\_error}); a status could report complete and abort together (abort now wins); a branch abort dropped MAIN's last finished byte (now kept).
 \end{itemize}
 
-\paragraph{Further checks.} The verification report (\sig{docs/verification\_report.pdf}) records the full sign-off of v0.7.1, and the toolchain guide explains how to run each check.
+\paragraph{Further checks.} The verification report (\sig{docs/verification\_report.pdf}) records the sixteen formal proofs, the mutation testing and the v0.7.2 corrections, and keeps the full sign-off of v0.7.1; the toolchain guide explains how to run each check.
 \begin{itemize}
-\item \textbf{Formal proofs.} Six modules are proven with SymbiYosys for every input sequence and with no depth limit (ABC \sig{pdr}); each harness in \sig{formal/} wraps the unchanged RTL with a small reference model. The host FIFO and the frame buffer: occupancy and flags exact, data out unchanged and in order, rollback discarding exactly the uncommitted entries. The UART transmitter: every frame exact for every ratio from 1 to 15. The branch unit: the two rules behave as the ISA describes. The CRC unit: the 8-bit-per-clock update equals a bit-by-bit reference CRC for every width, polynomial and chunk length. The line codec: every accepted entry is answered with exactly one \sig{tx\_done}, whatever the cancels, and the output enables obey \sig{DRIVE}.
+\item \textbf{Formal proofs.} Sixteen proofs with SymbiYosys, for every input sequence and with no depth limit, cover every block: the host UART receiver and transmitter, the control unit (against a second decoder written from the ISA), the return path, the entry dispatcher with the frame buffer, the host FIFO, the line codec's entry accounting and output enables, the branch unit, the CRC unit, and every counter of the frame chain (START, headers, MAIN, END, router, watchdog). Mutation testing measures how much each proof catches. The verification report gives the details, the assumptions each proof rests on, and what is left to simulation.
 \item \textbf{Lint.} Verilator with every warning on (\sig{scripts/lint.sh}) is clean; 13 reviewed waivers are recorded in \sig{lint/waivers.vlt}. There are no combinational loops (Yosys \sig{check -assert}).
 \item \textbf{Second simulator and coverage.} Every pin-level test also runs on a Verilator model, which reports 98.7\,\% line and branch coverage over the whole regression (\sig{scripts/coverage.sh}).
 \item \textbf{Independent decode.} The waveforms of the standards tests are decoded by sigrok's protocol decoders and checked against independently computed bytes: 30 of 30 pass (\sig{scripts/\allowbreak sigrok\_check.py}).
@@ -422,25 +423,29 @@ Return path with UART transmitter & 324 \\
 \end{tabular}
 \end{center}
 
-Flattened, as \sig{scripts/synth\_ihp.sh} does it, the design is 19,721 cells and 333,138\,$\mu$m$^2$, 36\,\% of the 6 $\times$ 4 tile area before the flow adds buffers and the clock tree.
+Flattened, as \sig{scripts/synth\_ihp.sh} does it, the design is 19,721 cells and 333,138\,$\mu$m$^2$, 36\,\% of the 6 $\times$ 4 tile area of v0.7.1, 27\,\% of the 8 $\times$ 4 area of v0.7.2, before the flow adds buffers and the clock tree.
 
 \subsection{Place and route on Tiny Tapeout}
 
-The design was hardened on the Tiny Tapeout CMOS5L template (the \sig{cmos5l} branch of the IHP template) with the flow its \sig{gds} workflow runs: LibreLane 3.1.0.dev3 and the IHP SG13CMOS5L PDK at the commit the workflow installs, at the 6 $\times$ 4 tiles the Jane Street challenge sets. Timing is from the routed design with extracted parasitics.
+From v0.7.2 the project is set to 8 $\times$ 4 tiles (\sig{info.yaml}), and the layout is built by the \sig{gds} workflow on every push with the Tiny Tapeout CMOS5L flow: LibreLane 3.1.0.dev3 and the IHP SG13CMOS5L PDK at the commit the workflow installs. The figures for v0.7.2 that need a routed layout come from that run; until then, this section keeps the last routed layout, v0.7.1 at 6 $\times$ 4, for comparison. The Jane Street challenge's updated rules allow 8 $\times$ 4 (the original brief set 6 $\times$ 4).
 
 \begin{center}
-\begin{tabular}{@{}ll@{}}
+\begin{tabular}{@{}lll@{}}
 \toprule
-Tiles & 6 $\times$ 4, 1289.28 $\times$ 710.64\,$\mu$m \\
-Cells & 18,969 after synthesis; 25,612 after place and route, not counting fill \\
- & (2,763 flip-flops, 6,104 timing repair buffers, 362 clock tree cells) \\
-Utilisation & 43\,\% of the core area \\
-Routing & 0 violations after detailed routing, 0 antenna violations (51 diodes) \\
-Sign-off & Magic DRC 0 errors; LVS clean \\
-Wire length & 1.15\,m \\
+ & 8 $\times$ 4, v0.7.2 & 6 $\times$ 4, v0.7.1 \\
+\midrule
+Die & 1724.16 $\times$ 710.64\,$\mu$m & 1289.28 $\times$ 710.64\,$\mu$m \\
+Core area & 1,208,173\,$\mu$m$^2$ & 902,417\,$\mu$m$^2$ \\
+Cells after synthesis & 19,003 & 18,969 \\
+Cells after place and route & from the \sig{gds} run & 25,612, not counting fill \\
+ & & (2,763 flip-flops, 6,104 repair buffers, 362 clock tree cells) \\
+Utilisation & about 32\,\% expected & 43\,\% \\
+Routing and sign-off & \sig{gds} and \sig{precheck} jobs & 0 routing and antenna violations; DRC 0 errors; LVS clean \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+Timing and power of the routed 6 $\times$ 4 layout of v0.7.1, with extracted parasitics:
 
 \begin{center}
 \begin{tabular}{@{}lllll@{}}
@@ -458,7 +463,7 @@ The CMOS5L flow only enforces timing at the typical corner, so \sig{src/config.j
 
 \begin{center}
 \includegraphics[width=\linewidth]{../images/layout_full.png}\\[2pt]
-{\small Routed layout, 6 $\times$ 4 tiles. Cells cover 43\,\% of the core; the rest is filler and decoupling cells.}
+{\small Routed layout of v0.7.1, 6 $\times$ 4 tiles. Cells cover 43\,\% of the core; the rest is filler and decoupling cells. The 8 $\times$ 4 layout of v0.7.2 replaces this picture once the \sig{gds} run is in.}
 \end{center}
 
 \subsection{Pin map}
@@ -513,7 +518,7 @@ Folder or file & Content \\
 \sig{test/} & cocotb test bench (\sig{tb.v}, \sig{test.py}) for the RTL and the gate-level netlist \\
 \sig{sim/} & Test bench \sig{bench.h} and the 16 tests \sig{t\_*.cpp} \\
 \sig{sim/verilator/} & Adapter that runs the same tests on a Verilator model, for coverage \\
-\sig{formal/} & Formal harnesses and \sig{.sby} files for six modules \\
+\sig{formal/} & Formal harnesses and \sig{.sby} files for sixteen proofs \\
 \sig{lint/} & \sig{waivers.vlt}, the reviewed Verilator warnings \\
 \sig{scripts/} & \sig{run.sh} (every test, then synthesis), \sig{lint.sh}, \sig{coverage.sh}, \sig{sigrok\_check.py}, \sig{formal.sh}, \sig{synth\_ihp.sh} (IHP cell count and area), \sig{sta.sh} (timing estimate), \sig{docs.sh} (builds these PDFs) \\
 \sig{host/} & Python host library and its README \\

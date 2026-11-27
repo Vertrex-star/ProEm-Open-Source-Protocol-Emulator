@@ -7,7 +7,8 @@
 // Submodules: branch_unit
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Proves the two BRANCH rules against a reference written from the ISA: the mask and value compare, line and CRC
+// sources, hit and miss actions, rule 0 before rule 1, and at most one action per rule per frame.
 // =============================================================================
 
 module branch_unit_formal (

@@ -7,7 +7,8 @@
 // Submodules: host_fifo
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Proves the host FIFO against a counting reference: occupancy never exceeds the depth, full and empty are exact,
+// flush empties it. A tracked entry shows any value written comes out unchanged and in order.
 // =============================================================================
 
 module host_fifo_formal (

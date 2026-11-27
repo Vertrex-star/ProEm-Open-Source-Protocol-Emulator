@@ -7,7 +7,8 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Combinational router that enables the blocks of a frame in order: each running header starts when the running
+// block before it has succeeded. The first unconfigured header ends the list, and headers outside the run's group are skipped.
 // =============================================================================
 
 module start_router #(

@@ -7,7 +7,8 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: The END block: shifts each received bit into a 16-bit window and succeeds when the last LEN bits equal PATTERN
+// in the chain's bit order. It ends a MAIN that waits for END, and re-arms START after an abort.
 // =============================================================================
 
 module end_counter #(

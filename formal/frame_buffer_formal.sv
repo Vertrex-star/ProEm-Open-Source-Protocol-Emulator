@@ -7,7 +7,8 @@
 // Submodules: frame_buffer
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Proves the frame buffer as the host FIFO, plus commit and rollback: rollback drops exactly the uncommitted
+// entries and reads only ever see committed ones. A tracked entry shows values come out unchanged and in order.
 // =============================================================================
 
 module frame_buffer_formal (

@@ -7,7 +7,8 @@
 // Submodules: protocol_emulator
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Tiny Tapeout top level: maps the chip core onto ui_in, uo_out and the uio pins, with channel A on uio[2:0] and
+// channel B on uio[5:3]. It holds no logic of its own beyond the pin map and the output enables.
 // =============================================================================
 
 module tt_um_vertrex_star_proem (

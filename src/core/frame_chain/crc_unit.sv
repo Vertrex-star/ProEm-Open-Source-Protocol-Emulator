@@ -7,7 +7,8 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Computes any CRC of 1 to 16 bits, up to 8 bits per clock, over the bits of a frame. It checks the residue on
+// receive or supplies the CRC to append on transmit, and sends the fixed reply pattern after a good or bad frame.
 // =============================================================================
 
 module crc_unit (

@@ -1,0 +1,28 @@
+[tasks]
+prove
+cover
+wide
+
+[options]
+prove: mode prove
+wide: mode prove
+cover: mode cover
+cover: depth 120
+
+[engines]
+prove: abc pdr
+wide: abc pdr
+cover: smtbmc yices
+
+[script]
+~wide: read -formal uart_rx.sv uart_rx_formal.sv
+wide: read -formal -D WIDE uart_rx.sv uart_rx_formal.sv
+prep -top uart_rx_formal
+memory_map
+flatten
+opt -fast
+setundef -anyseq
+
+[files]
+../src/primitives/uart_rx.sv
+uart_rx_formal.sv

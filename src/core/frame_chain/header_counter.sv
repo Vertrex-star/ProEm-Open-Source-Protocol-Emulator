@@ -7,7 +7,8 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: One header block (HDR 1 to 6): compares its CYC bits one at a time with VALUE and fails on the first wrong bit,
+// or accepts any value (ANY), waits for its first bit (SEEK), or sends VALUE when it is a write block.
 // =============================================================================
 
 module header_counter (

@@ -23,7 +23,7 @@ for t in $TESTS; do
 done
 n=0
 run() { n=$((n+1)); PROEM_COV=$OUT/dat/$n.dat "$@" > $OUT/run_$n.log 2>&1 || { echo "FAIL: $*"; tail -5 $OUT/run_$n.log; }; }
-for r in 16 7; do run $OUT/t_control $r; done
+for r in 16 7 1; do run $OUT/t_control $r; done
 run $OUT/t_uart 16 40.8; run $OUT/t_uart 8 39.2
 for d in 4 6 12; do run $OUT/t_spi $d; done
 for d in 4 10 25; do run $OUT/t_i2c $d; done

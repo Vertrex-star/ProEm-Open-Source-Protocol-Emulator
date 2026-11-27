@@ -7,7 +7,8 @@
 // Submodules: protocol_emulator
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Instantiation template for protocol_emulator, showing every port with its wiring. It is not part of the design
+// and is not in src/files.f.
 // =============================================================================
 
 module protocol_emulator_inst (

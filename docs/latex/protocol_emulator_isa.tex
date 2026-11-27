@@ -22,6 +22,7 @@
 \newcommand{\vsix}{\textcolor{sixc}{\textsf{\small v0.6}}}
 \definecolor{sevenc}{HTML}{9D174D}
 \newcommand{\vseven}{\textcolor{sevenc}{\textsf{\small v0.7}}}
+\newcommand{\vseventwo}{\textcolor{sevenc}{\textsf{\small v0.7.2}}}
 \newcommand{\sig}[1]{\texttt{#1}}
 \setlist{itemsep=2pt,topsep=4pt}
 \setlength{\parskip}{4pt}
@@ -30,12 +31,12 @@
 \pagestyle{fancy}
 \fancyhf{}
 \lhead{\small Paul Vincent Bezzina \textbar{} ProEm - Open Source Protocol Emulator}
-\rhead{\small ISA draft v0.7.1}
+\rhead{\small ISA draft v0.7.2}
 \cfoot{\small\thepage}
 
-\title{ProEm Instruction Set\\\large Draft v0.7.1}
+\title{ProEm Instruction Set\\\large Draft v0.7.2}
 \author{Paul Vincent Bezzina}
-\date{17 October 2026}
+\date{26 November 2026}
 
 \begin{document}
 \maketitle
@@ -54,7 +55,7 @@ Everything in this document is implemented in the RTL and tested end to end at p
 \item \textbf{Link} (\sig{LINK}). The rate of the return UART; the instruction line sets its own rate from the first byte, \texttt{0x55}.
 \end{enumerate}
 
-Tags show the version that added a feature: \new, \vfive, \vsix, \vseven. Section~\ref{sec:history} lists the changes in each version.
+Tags show the version that added a feature: \new, \vfive, \vsix, \vseven, \vseventwo. Section~\ref{sec:history} lists the changes in each version.
 
 \section{Frame chain recap}
 
@@ -151,7 +152,7 @@ Field & Meaning \\
 \sig{W} & Direction. 0 = read (compare against the line), 1 = write (send \sig{VALUE}). \\
 \sig{CAP} & Read blocks only: also push the received value to the host. \\
 \sig{GRP} & \new{} \sig{HDR} only (START always runs). Group: \texttt{00} always, \texttt{01} read runs only, \texttt{10} write runs only, \texttt{11} reserved. \\
-\sig{CYC} & Field length in bits, 1--8. For \sig{START} only, 0 means a \emph{condition} START: succeed as soon as \sig{PIN} equals \sig{VALUE[0]}, without using a tick (SPI chip select). \vfive{} In I\textsuperscript{2}C target mode (\sig{OUT I2C} with a SYNC clock) it waits for an I\textsuperscript{2}C START or repeated START instead. \\
+\sig{CYC} & Field length in bits, 1--8 (other values raise \sig{cmd\_error} \vseventwo). For \sig{START} only, 0 means a \emph{condition} START: succeed as soon as \sig{PIN} equals \sig{VALUE[0]}, without using a tick (SPI chip select). \vfive{} In I\textsuperscript{2}C target mode (\sig{OUT I2C} with a SYNC clock) it waits for an I\textsuperscript{2}C START or repeated START instead. \\
 \sig{SR} & \new{} \sig{HDR} only: a repeated START (Sr) just before this block. The chain sends the TX sender a \sig{wire} entry of length 0, which means ``Sr''; the block waits until it has gone out. Needed for I\textsuperscript{2}C write-then-read. \\
 \sig{ANY} & \vfive{} \sig{HDR} read blocks only: accept any value instead of comparing. The received bits are kept, returned with \sig{CAP}, and can be tested by \sig{BRANCH}. \\
 \sig{SEEK} & \vseven{} \sig{HDR} read blocks only (not with \sig{ANY}): ignore incoming bits until one equals the field's first bit, then compare the remaining \sig{CYC}$-$1 bits as usual (a mismatch there still aborts). Use it to wait out a gap of unknown length in the middle of a frame: a seeking 1-bit header with \sig{VALUE} 0 waits for the next start bit. The watchdog still ends a frame that never continues. \\
@@ -206,7 +207,7 @@ Field & Meaning \\
 \end{bytefield}
 \end{center}
 
-END shifts one input bit into a 16-bit window on every \sig{end\_tick} and matches the last \sig{LEN} bits (1--16) against \sig{PATTERN}. It ends a MAIN running with \sig{WE}, and after an abort it makes START wait until END has matched again. \sig{PAIR}, \sig{INV}, \sig{ERR} and \sig{PIN\_B} are \new.
+END shifts one input bit into a 16-bit window on every \sig{end\_tick} and matches the last \sig{LEN} bits (1--16; other values raise \sig{cmd\_error} \vseventwo) against \sig{PATTERN}. It ends a MAIN running with \sig{WE}, and after an abort it makes START wait until END has matched again. \sig{PAIR}, \sig{INV}, \sig{ERR} and \sig{PIN\_B} are \new.
 
 \begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}X@{}}
 \toprule
@@ -267,7 +268,7 @@ Field & Meaning \\
 \begin{itemize}
 \item \textbf{Mode switch.} ``Read'' and ``write'' set the run mode for the rest of the frame, exactly as \sig{RUN READ} and \sig{RUN WRITE} would have: blocks with \sig{GRP} = \texttt{01} or \texttt{10} run or are skipped accordingly, and a MAIN with \sig{DIR} = follow takes that direction. The next frame starts again in the mode \sig{RUN} gave.
 \item \textbf{Timing.} A rule is evaluated in the clock after its block succeeds; the chain pauses for that one clock, so the next block always starts in the new mode. Every standard gives at least 2 clocks per bit, so no bit is missed.
-\item \textbf{Abort.} A branch abort keeps the values captured so far (so the host sees, say, the acknowledge that caused it), stops the chain driving the line at once, discards any queued bits of the frame, and reports status \texttt{0x82} (\texttt{0xC2} if it was the \sig{HIT} action).
+\item \textbf{Abort.} A branch abort keeps the values captured so far (so the host sees, say, the acknowledge that caused it), including a byte MAIN has finished but not yet sent back (\vseventwo), stops the chain driving the line at once, discards any queued bits of the frame, and reports status \texttt{0x82} (\texttt{0xC2} if it was the \sig{HIT} action).
 \item \textbf{Read-back (\sig{SRC} = 1, \sig{BLOCK} = 0).} \sig{LINE}'s \sig{PIN\_A} must be the pad the chip drives. The comparison is made in the middle of each bit (ASYNC, RECOVER), in the middle of the high phase (GENERATE) or on the sampling edge (SYNC). The input pipeline delays the read-back by 3 clocks, so ASYNC needs at least 8 clocks per bit. While such a rule is set, a write frame stays open until its last bit has left the pin, so a late mismatch still reaches its status.
 \item \textbf{Two rules.} Rule 0 has priority when both act in the same clock. \sig{BRANCH} with byte 1 = \texttt{00} turns a rule off; \sig{CLEAR} turns both off.
 \item \textbf{Status.} Bit 6 of the frame's status byte records that a rule matched (took its \sig{HIT} action); bit 7 that a branch aborted the frame.
@@ -508,9 +509,9 @@ The end of a frame is marked by the frame's status entry (below), which passes t
 
 \subsection{\sig{LINK} and the return link}
 
-\sig{LINK} (\texttt{0xE}, global, 2 operand bytes) sets the return UART's clocks per bit; 0 uses the rate measured by auto-baud. At 50\,MHz, 4 clocks per bit is 12.5\,Mbaud, which the RP2040's PIO can receive.
+\sig{LINK} (\texttt{0xE}, global, 2 operand bytes) sets the return UART's clocks per bit; 0 uses the rate measured by auto-baud. \vseventwo{} The UART takes the divider at the start of each byte, so a \sig{LINK} sent while results are coming back changes the rate from the next byte on and never corrupts the byte on the line. At 50\,MHz, 4 clocks per bit is 12.5\,Mbaud, which the RP2040's PIO can receive.
 
-\paragraph{Auto-baud.} After reset the first byte on the instruction line must be \texttt{0x55}. The chip times its first five falling edges (8 bit times), sets its receive rate from that, and does not pass the byte on.
+\paragraph{Auto-baud.} After reset the first byte on the instruction line must be \texttt{0x55}. The chip times its first five falling edges (8 bit times), sets its receive rate from that, and does not pass the byte on. Any rate from 1 clock per bit (\vseventwo) upwards works.
 
 \paragraph{Return format.} Every message is two bytes, sent with 1 start and 1 stop bit:
 \begin{center}
@@ -520,7 +521,7 @@ First byte & Second & Meaning \\
 \midrule
 \texttt{10 C 0 LLLL} & value & Host entry from chain \texttt{C}, length \texttt{L} (0--8; length 0 value \texttt{02} = NACK) \\
 \texttt{10 C 0 1110} & result & \vsix{} CRC result of a read frame on chain \texttt{C}: bit 0 good, bit 1 checked; sent after the data and before the status \\
-\texttt{10 C 0 1111} & flags & End of a frame on chain \texttt{C}: bit 0 complete, 1 abort, 2 timeout, 3 line error, 4 overflow, \vfive{} 5 underrun, 6 branch matched, 7 branch abort \\
+\texttt{10 C 0 1111} & flags & End of a frame on chain \texttt{C}: bit 0 complete, 1 abort (never both, \vseventwo), 2 timeout, 3 line error, 4 overflow, \vfive{} 5 underrun, 6 branch matched, 7 branch abort \\
 \texttt{11 000000} & flags & Link events: bit 0 \sig{rx\_error}, 1 \sig{cmd\_error}, 2 \sig{DATA} dropped on A, 3 on B \\
 \bottomrule
 \end{tabularx}
@@ -731,6 +732,17 @@ C7 id[10:3]   C2 id[2:0]   C7 data   72
 A lost arbitration stops the chip driving within the same bit and reports \texttt{C2}; the winning frame continues undisturbed on the line and can be received by the other chain. The arbitration test runs without bit stuffing. \vsix{} \sig{LINE} \sig{STUFF} = 5 with \sig{SANY} = 1 is now tested on its own: a CAN frame with stuffing is received, its CRC-15 checked, and the acknowledge driven into the ACK slot, both from a node model and chip to chip.
 
 \section{Version history}\label{sec:history}
+
+\subsection{v0.7.2 (26 November): corrections from the second verification round}
+
+No new instructions and no new fields; every program the host library builds runs unchanged. Five behaviours were tightened after the formal proofs and mutation testing of November (see the verification report).
+\begin{itemize}
+\item \sig{START} with \sig{CYC} 9 to 15, \sig{HDR} with \sig{CYC} 0 or 9 to 15, and \sig{END} with \sig{LEN} 0 or 17 to 31 now raise \sig{cmd\_error} and leave the block unchanged, as \sig{HDR 0}, \sig{HDR 7} and \sig{BRANCH} 5 to 7 already did. Before, they were accepted and behaved in ways this document did not describe.
+\item \sig{LINK}: the return UART takes the divider at the start of each byte. A \sig{LINK} written while a message is going out no longer garbles the byte on the line; the new rate starts with the next byte.
+\item Auto-baud works down to 1 clock per bit. Before, the receiver needed at least 2.
+\item A frame's status byte never has \sig{complete} (bit 0) and \sig{abort} (bit 1) set together: if the last bit and an abort fall on the same clock, the abort wins.
+\item A \sig{BRANCH} abort keeps the last byte MAIN had finished but not yet handed over, as it keeps every other value captured so far.
+\end{itemize}
 
 \subsection{v0.7.1 (14 October): corrections}
 

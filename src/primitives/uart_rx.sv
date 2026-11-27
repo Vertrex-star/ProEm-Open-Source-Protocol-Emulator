@@ -7,7 +7,8 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Host instruction UART receiver with auto-baud: times the first 0x55 to learn the clocks per bit (1 or more),
+// then receives 8N1 bytes. A byte with a bad stop bit raises frame_error instead of rx_valid.
 // =============================================================================
 
 module uart_rx #(
@@ -115,7 +116,8 @@ always_ff @(posedge clk or negedge rst_n) begin
 				clkCount <= '0;
 				bitIndex <= '0;
 				if (!serialR) begin
-					select <= START;
+					// At 1 clock per bit there is no half bit to wait: the next sample is already bit 0.
+					select <= (ratio < 2) ? RECEIVE : START;
 				end
 			end
 

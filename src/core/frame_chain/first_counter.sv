@@ -7,7 +7,8 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: The START block: waits on its own pin for its CYC-bit VALUE, for a condition (CYC 0) or for an I2C START, or
+// sends VALUE when it is a write block. Its success opens the frame.
 // =============================================================================
 
 module first_counter (

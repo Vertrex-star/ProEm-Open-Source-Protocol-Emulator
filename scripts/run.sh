@@ -17,8 +17,8 @@ TESTS="t_control t_uart t_spi t_i2c t_ps2 t_ethernet t_manchester t_usb t_random
 mkdir -p build
 $SIMYOSYS -q -p "read_verilog -sv $RTL; hierarchy -check -top protocol_emulator; proc; flatten; memory -nomap; opt; write_cxxrtl build/emu_sim.h" 2>&1 | grep -v "Replacing memory\|feedback" || true
 for t in $TESTS; do g++ -std=c++14 -O2 -I"$RT" -Ibuild sim/$t.cpp -o build/$t; done
-echo "== control: auto-baud, errors, HALT, CLEAR, LINK, watchdog"
-for r in 16 7; do ./build/t_control $r; done
+echo "== control: auto-baud (16, 7 and 1 clocks per bit), errors, HALT, CLEAR, LINK, watchdog"
+for r in 16 7 1; do ./build/t_control $r; done
 echo "== UART full duplex (sender 2% fast, then 2% slow)"
 ./build/t_uart 16 40.8; ./build/t_uart 8 39.2
 echo "== SPI controller full duplex and SPI target (SCK half period 4, 6, 12 clocks)"

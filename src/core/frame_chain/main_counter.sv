@@ -7,7 +7,9 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: The MAIN block: reads BITS bits into host entries of up to 8 bits, or sends BITS bits taken from the host FIFO,
+// optionally with an acknowledge bit after every byte. It can run until END matches instead, and keeps a finished byte through
+// a branch abort.
 // =============================================================================
 
 module main_counter (
@@ -27,6 +29,7 @@ module main_counter (
 	input logic fifo_free,
 	input logic end_success,
 	input logic abort,
+	input logic keep_pending,
 	input logic host_empty,
 	input logic[7:0] host_data,
 	input logic[3:0] host_len,
@@ -164,7 +167,10 @@ always_ff@(posedge clk or negedge rst_n) begin
 			nack_pending <= 1'b0;
 		end else if (abort || end_finish || !enable) begin
 			if (abort) begin
-				pending_valid <= 1'b0;
+				// A branch abort keeps what was captured, so a finished byte still waiting to leave is kept too.
+				if (!keep_pending) begin
+					pending_valid <= 1'b0;
+				end
 				ack_pending <= 1'b0;
 				nack_pending <= 1'b0;
 			end

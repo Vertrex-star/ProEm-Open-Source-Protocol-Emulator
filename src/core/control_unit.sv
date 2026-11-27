@@ -7,7 +7,9 @@
 // Submodules: none
 // Author: Paul Vincent Bezzina
 // Language: SystemVerilog
-// Description:
+// Description: Instruction decoder: collects an opcode byte and its operand bytes from the host UART and turns each instruction
+// into one registered configuration write or command pulse for chain A or B, refusing out-of-range lengths with cmd_error. It
+// also holds the per-chain LINE, CLOCK and OUT settings and the global LINK divider.
 // =============================================================================
 
 module control_unit (
@@ -87,6 +89,7 @@ logic msbA;
 logic msbB;
 logic startMsb;
 logic chainWrite;
+logic lengthBad;
 
 logic [3:0] internal_sel;
 logic [7:0] internal_compare;
@@ -149,7 +152,11 @@ end
 assign startMsb = chain ? msbB : msbA;
 assign startCycles = operands[19:16];
 assign startValue = (!startMsb && startCycles != 4'd0 && startCycles < 4'd8) ? (operands[7:0] << (4'd8 - startCycles)) : operands[7:0];
-assign chainWrite = (opcode == OP_START) || (opcode == OP_HDR && index != 3'd0 && index != 3'd7) || (opcode == OP_MAIN) || (opcode == OP_END) || (opcode == OP_WDOG) || (opcode == OP_ORDER) || (opcode == OP_BRANCH && index <= 3'd4);
+// Field lengths outside the ISA's ranges (START CYC 0 to 8, HDR CYC 1 to 8, END LEN 1 to 16) are refused with cmd_error.
+assign lengthBad = ((opcode == OP_START) && (operands[19:16] > 4'd8))
+	|| ((opcode == OP_HDR) && ((operands[19:16] == 4'd0) || (operands[19:16] > 4'd8)))
+	|| ((opcode == OP_END) && ((operands[31:27] == 5'd0) || (operands[31:27] > 5'd16)));
+assign chainWrite = !lengthBad && ((opcode == OP_START) || (opcode == OP_HDR && index != 3'd0 && index != 3'd7) || (opcode == OP_MAIN) || (opcode == OP_END) || (opcode == OP_WDOG) || (opcode == OP_ORDER) || (opcode == OP_BRANCH && index <= 3'd4));
 
 always_ff @(posedge clk or negedge rst_n) begin
 	if (!rst_n) begin
@@ -245,6 +252,9 @@ always_ff @(posedge clk or negedge rst_n) begin
 				select <= OPCODE;
 				internal_we_a <= chainWrite && !chain;
 				internal_we_b <= chainWrite && chain;
+				if (lengthBad) begin
+					internal_cmd_error <= 1'b1;
+				end
 				case (opcode)
 					OP_START, OP_HDR: begin
 						internal_sel <= (opcode == OP_START) ? 4'd0 : {1'b0, index};

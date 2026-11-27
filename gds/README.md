@@ -1,8 +1,7 @@
 # ProEm layout (GDS) and results
 
-This folder holds the finished layout of ProEm and the numbers behind it: how much space it
-takes, how it relates to the Jane Street protocol emulator challenge, and its power and
-performance.
+This folder holds the layout of ProEm and the numbers behind it: how much space it takes, how it
+relates to the Jane Street protocol emulator challenge, and its power and performance.
 
 | File | What it is |
 | --- | --- |
@@ -10,37 +9,42 @@ performance.
 | `tt_um_vertrex_star_proem.lef` | The block's outline and pin positions |
 | `images/` | Pictures of the layout (see [Images of the chip](#images-of-the-chip)) |
 
-The layout was built on 14 October 2026 with the Tiny Tapeout CMOS5L flow (template branch
-`cmos5l`, LibreLane 3.1.0.dev3, IHP-Open-PDK `2bbec755`) on the IHP SG13CMOS5L 130 nm process,
-at 6 x 4 tiles and 50 MHz. This is the process and the size the Jane Street challenge uses, and
-it is the same flow the `gds` GitHub workflow runs on every push. The design is ISA v0.7.1: the
-v0.5 features plus the CRC unit, the reply, the v0.7 additions (22-bit divider, Manchester
-boundary lock, seeking headers, byte-field CRCs, release while reading) and the timing changes
-that close the slow corner. The chip has not been fabricated yet.
+## Current state: 8 x 4 tiles, ISA v0.7.2
 
-## Summary
+From v0.7.2 (26 November 2026) the project is set to **8 x 4 tiles** in `info.yaml`. The layout is
+built by the `gds` GitHub workflow on every push, with the Tiny Tapeout CMOS5L flow (template
+branch `cmos5l`, LibreLane 3.1.0.dev3, IHP-Open-PDK `2bbec755`) on IHP SG13CMOS5L 130 nm at
+50 MHz. To update this folder after a green run:
 
-| | |
-| --- | --- |
-| Top module | `tt_um_vertrex_star_proem` |
-| Process | IHP SG13CMOS5L 130 nm (Metal1 to Metal4 plus TopMetal1) |
-| Size | 6 x 4 Tiny Tapeout tiles; 1289.28 x 710.64 um |
-| Logic | 25,612 cells after place and route, not counting fill |
-| Space used | 43 % of the core area; the lower part of the die is free |
-| Clock | 50 MHz; timing met at every corner (3.8 ns to spare at the slow corner) |
-| Power | About 10.2 mW at 50 MHz |
-| Checks | Magic DRC 0 errors, LVS clean, Tiny Tapeout precheck passed locally (all checks except the full KLayout CMOS5L DRC, which the GitHub precheck runs) |
+1. Open the `gds` run on GitHub and download its `tt_submission` artifact.
+2. Copy `tt_um_vertrex_star_proem.gds` and `tt_um_vertrex_star_proem.lef` from its `tt_submission/`
+   folder into this folder, replacing the 6 x 4 files of v0.7.1.
+3. Fill in the place-and-route figures below from the `GDS_logs` artifact
+   (`runs/wokwi/final/metrics.json`): cells, utilisation, slack at each corner, power.
+4. Replace `images/layout_full.png` with the `gds_render` artifact's picture.
 
-## Space
+The design is ISA v0.7.2: v0.7.1 plus the five corrections from the second verification round
+(range checks on START, HDR and END lengths, a LINK divider taken per byte, auto-baud from 1
+clock per bit, abort winning over complete, and a branch abort keeping MAIN's last finished byte).
+The chip has not been fabricated yet.
 
-| | |
-| --- | --- |
-| Die | 1289.28 x 710.64 um = 916,214 um² |
-| Core (area available for cells) | 902,417 um² |
-| Standard cells after place and route | 385,486 um² |
-| Utilisation | 43 % |
+| | 8 x 4, v0.7.2 | 6 x 4, v0.7.1 (14 October, last routed layout) |
+| --- | --- | --- |
+| Top module | `tt_um_vertrex_star_proem` | same |
+| Process | IHP SG13CMOS5L 130 nm (Metal1 to Metal4 plus TopMetal1) | same |
+| Die | 1724.16 x 710.64 um = 1,225,262 um² | 1289.28 x 710.64 um = 916,214 um² |
+| Core (area available for cells) | 1,208,173 um² | 902,417 um² |
+| Cells after synthesis | 19,003 (301,423 um², LibreLane synthesis of v0.7.2) | 18,969 |
+| Cells after place and route | from the `gds` run | 25,612, not counting fill |
+| Utilisation | about 32 % expected | 43 % |
+| Clock | 50 MHz; timing from the `gds` run | 50 MHz; met at every corner (3.8 ns to spare at the slow corner) |
+| Power | from the `gds` run; expected close to 10 mW | about 10.2 mW |
+| Checks | the `gds`, `precheck` and `gl_test` jobs | Magic DRC 0 errors, LVS clean, precheck passed locally |
 
-Where the cell area goes:
+The 8 x 4 die gives the same logic a third more area, so placement and routing are easier and the
+slow-corner margin should not shrink. The v0.7.2 changes add 34 cells after synthesis.
+
+Where the cell area went in the 6 x 4 layout of v0.7.1, as a guide to the 8 x 4 one:
 
 | Cell class | Count | Area (um²) | Share |
 | --- | ---: | ---: | ---: |
@@ -51,17 +55,14 @@ Where the cell area goes:
 | Inverters, buffers, antenna diodes | 1,060 | 5,810 | 2 % |
 | **Total** | **25,612** | **385,486** | **100 %** |
 
-Against the challenge's rough budget (24 tiles of about 200 x 150 um, about 1,000 cells per
-tile), the cells take about 0.39 mm² of the nominal 0.7 mm², and about 19,000 of the cells are
-logic; the rest are hold and repair buffers the flow adds.
-
 ## Jane Street challenge
 
 The [Jane Street protocol emulator ASIC competition](https://blog.janestreet.com/protocol-emulator-asic-competition/)
 (announced 10 September 2026; deadline 18 January 2027) asks for a chip that can speak real
-protocols, built on IHP's CMOS5L process through Tiny Tapeout at 6 x 4 tiles. Entries start
-from the CMOS5L template, and the Tiny Tapeout GitHub Actions build the GDS and run the precheck;
-a submission needs a passing GDS build.
+protocols, built on IHP's CMOS5L process through Tiny Tapeout. The challenge originally set the
+size at 6 x 4 tiles; the updated rules allow 8 x 4, which is the size ProEm uses from v0.7.2.
+Entries start from the CMOS5L template, and the Tiny Tapeout GitHub Actions
+build the GDS and run the precheck; a submission needs a passing GDS build.
 
 | Challenge point | ProEm today |
 | --- | --- |
@@ -70,23 +71,24 @@ a submission needs a passing GDS build.
 | Stretch: 10 Mbit Ethernet | Receive (Manchester decoded on chip); transmit needs a 40 or 60 MHz clock |
 | Extra | PS/2; SWD-style acknowledge handling; CAN-style arbitration; two channels at once; auto-baud host link |
 | Programmability | Frames described in instruction bytes, plus `BRANCH` rules that change a frame's direction or abort it from a received field or a read-back mismatch |
-| Area: 6 x 4 tiles | Fits at 43 % utilisation |
+| Area | 8 x 4 tiles, as the updated rules allow; about 32 % expected utilisation (v0.7.1 fitted the original 6 x 4 at 43 %) |
 | Process: CMOS5L | Built on the CMOS5L template; the `gds` workflow uses the same flow |
-| Full RTL to GDS with timing closure | Done (this folder); timing met at the slow, typical and fast corners |
-| Verification | Pin-level tests for every standard, including 16 more in `t_standards`; 1,800 random programs; 600 random branch programs; cocotb on RTL and on the routed CMOS5L netlist; a second simulator (Verilator) with 98 % line coverage; sigrok decoding of the standards waveforms; formal proofs of the host FIFO, frame buffer, UART transmitter, branch unit, CRC unit and line codec |
+| Full RTL to GDS with timing closure | v0.7.1 at 6 x 4: done, met at every corner. v0.7.2 at 8 x 4: from the `gds` workflow |
+| Verification | Pin-level tests for every standard, including 16 more in `t_standards`; 1,800 random programs; 600 random branch programs; cocotb on RTL and gate level; a second simulator (Verilator) with 98 % line coverage; sigrok decoding of the standards waveforms; sixteen formal proofs covering every block, with mutation testing of each |
 
 How it differs from the brief: the brief describes a tiny CPU running firmware. ProEm lets the
 host describe a frame (START, headers, MAIN, END), does line coding (NRZI, Manchester, bit
 stuffing, I2C conditions) in hardware, and reacts within a frame through two branch rules per
-channel. Every bit has exact timing and both channels run in parallel. Still planned before
-the deadline: formal proofs for the UART receiver and the frame chain counters.
+channel. Every bit has exact timing and both channels run in parallel.
 
 Jane Street pay to fabricate the winning designs, so the entry does not need a paid Tiny
 Tapeout submission.
 
 ## Power
 
-Estimated by OpenROAD on the routed layout with extracted wiring, at 50 MHz:
+Estimated by OpenROAD on the routed 6 x 4 layout of v0.7.1, with extracted wiring, at 50 MHz. The
+8 x 4 layout has the same flip-flops and clock tree size, so it should be close; the `gds` run
+gives the new figure.
 
 | Corner | Flip-flops | Logic | Clock tree | Total |
 | --- | ---: | ---: | ---: | ---: |
@@ -95,15 +97,14 @@ Estimated by OpenROAD on the routed layout with extracted wiring, at 50 MHz:
 | Fast: 1.32 V, -40 °C | 8.99 mW | 0.45 mW | 3.24 mW | 12.7 mW |
 
 * About 8.5 mA from the 1.2 V core supply; leakage is about 0.04 mW.
-* About 96 % of the power is the clock reaching the 2,763 flip-flops; the logic itself uses
-  about 4 %. Idle and busy power are therefore nearly the same.
-* Heat: well under 1 °C of self-heating in a normal package; no cooling concerns.
-* This is a vectorless estimate (default switching rates). A vector-based estimate from the
-  gate-level tests, or a current measurement on the real chip, would refine it.
+* About 96 % of the power is the clock reaching the flip-flops; the logic itself uses about 4 %.
+  Idle and busy power are therefore nearly the same.
+* This is a vectorless estimate (default switching rates).
 
 ## Performance
 
-Timing after routing, with extracted wiring, at a 50 MHz (20 ns) clock:
+Timing after routing of the 6 x 4 layout of v0.7.1, at a 50 MHz (20 ns) clock. The `gds` run
+gives the 8 x 4 figures.
 
 | Corner | Setup slack | Hold slack | Maximum clock |
 | --- | ---: | ---: | ---: |
@@ -111,11 +112,7 @@ Timing after routing, with extracted wiring, at a 50 MHz (20 ns) clock:
 | Slow: 1.08 V, 125 °C | 3.8 ns | 0.61 ns | 62 MHz |
 | Fast: 1.32 V, -40 °C | 12.4 ns | 0.10 ns | 131 MHz |
 
-0 setup, hold, recovery and removal violations at every corner. The CMOS5L flow only enforces
-the typical corner. The first v0.7.1 layout missed the slow corner by 3.8 ns on paths into the
-CRC unit and the frame buffer; registering the CRC input, a CRC update with no per-bit
-multiplexers, registered FIFO and buffer state, and a second setup repair after global routing
-(`src/config.json`) closed it with 3.8 ns to spare. Details are in
+The CMOS5L flow only enforces the typical corner. Details of how the slow corner was closed are in
 [docs/verification_report.pdf](../docs/verification_report.pdf).
 
 Protocol speeds at 50 MHz:
@@ -131,39 +128,33 @@ Protocol speeds at 50 MHz:
 | PS/2 | Full speed |
 | CAN-style arbitration | Tested at 1 Mbit/s; needs at least 8 clocks per bit |
 
-Host links: instructions in at up to about 7 Mbaud; results out at up to 12.5 Mbaud, which is
-about 5 Mbit/s of returned data. `DATA` can stream while a frame runs; a fixed-timing line
-keeps up when each entry lasts longer on the line than its 140 clocks on the instruction link
-(UART to about 1.2 Mbaud when sent as byte, stop and start entries). Pad and pin multiplexer
-speed limits for the shuttle have not been checked.
+Host links: instructions in at any rate from 1 clock per bit (v0.7.2) up; results out at up to
+12.5 Mbaud (`LINK` 4), which is about 5 Mbit/s of returned data. `DATA` can stream while a frame
+runs; a fixed-timing line keeps up when each entry lasts longer on the line than its time on the
+instruction link. Pad and pin multiplexer speed limits for the shuttle have not been checked.
 
 ## Checks
 
-| Check | Result |
-| --- | --- |
-| Verilator lint (`-Wall`) | Clean, with reviewed waivers |
-| Detailed routing | 0 violations |
-| Antenna | 0 violations |
-| Setup, hold, recovery, removal and slew | 0 violations at the slow, typical and fast corners |
-| Magic DRC | 0 errors |
-| LVS (layout matches the netlist) | Clean |
-| Tiny Tapeout precheck | Passed locally (pin, boundary, layer, cell name, zero area, FEOL/BEOL checks); the full KLayout CMOS5L DRC runs on GitHub |
-| cocotb, gate level (routed CMOS5L netlist and cell models, Icarus) | 6 of 6 passed |
-| cocotb, RTL | 6 of 6 passed |
-| Formal proofs (SymbiYosys, unbounded) | Host FIFO, frame buffer, UART transmitter, branch unit, CRC unit, line codec: all proven |
+| Check | v0.7.2, 8 x 4 | v0.7.1, 6 x 4 |
+| --- | --- | --- |
+| Verilator lint (`-Wall`) | Clean, with reviewed waivers | Clean |
+| Pin-level suite (CXXRTL) | All pass, plus auto-baud at 1 clock per bit and the new `cmd_error` range checks | All pass |
+| Formal proofs (SymbiYosys) | Sixteen, all proven; mutation testing in the verification report | Six |
+| Detailed routing, antenna, DRC, LVS, timing | the `gds` and `precheck` jobs | 0 violations; DRC 0 errors; LVS clean; timing met at every corner |
+| cocotb, gate level | the `gl_test` job | 6 of 6 passed |
 
 ## Images of the chip
 
-These are pictures of the finished layout that would be sent for fabrication; the chip itself
-has not been made yet.
+The pictures in `images/` are of the 6 x 4 layout of v0.7.1. Replace them from the 8 x 4 run: the
+`gds_render` artifact is a picture of the whole block, the `viewer` job publishes a 3D view, and
+KLayout can export close-ups of the new GDS once it is in this folder.
 
-### Whole block
+### Whole block (v0.7.1, 6 x 4)
 
-![Whole layout, 6 x 4 tiles](images/layout_full.png)
+![Whole layout of v0.7.1, 6 x 4 tiles](images/layout_full.png)
 
 1289 x 711 um. Red is the lowest routing metal; yellow and green are the upper routing layers;
-the regular green vertical stripes are the power straps. The logic fills the upper and middle of
-the die; the plain area below is filler cells, free for future additions.
+the regular green vertical stripes are the power straps.
 
 ### Close-up
 
