@@ -74,18 +74,20 @@ end
 assign nextHistory = {history[14:0], input_bit};
 assign nextCount = (count == 5'd16) ? count : count + 1'b1;
 
-// The spec: the last len bits match PATTERN as a plain number sent in the chain's order.
+// The spec: the last len bits match PATTERN as a plain number sent in the chain's order. MSB first, the newest bit is PATTERN
+// bit 0; LSB first, it is PATTERN bit len-1, so the expected history is PATTERN reversed and shifted down by 16-len. Written
+// with fixed indices and shifts only (no variable bit index), so no tool version sees an out-of-range bit.
+logic [15:0] patternReversed;
+logic [15:0] expectHistory;
+logic [15:0] lenMask;
+
 always_comb begin
-	matchNext = 1'b1;
 	for (int k = 0; k < 16; k++) begin
-		if (k < len) begin
-			if (orderAtConfig) begin
-				if (nextHistory[k] != pattern[k]) matchNext = 1'b0;
-			end else begin
-				if (nextHistory[k] != pattern[len - 1 - k]) matchNext = 1'b0;
-			end
-		end
+		patternReversed[k] = pattern[15 - k];
 	end
+	expectHistory = orderAtConfig ? pattern : (patternReversed >> (5'd16 - len));
+	lenMask = (len >= 5'd16) ? 16'hFFFF : ~(16'hFFFF << len);
+	matchNext = ((nextHistory ^ expectHistory) & lenMask) == 16'd0;
 end
 
 always_ff @(posedge clk or negedge rst_n) begin

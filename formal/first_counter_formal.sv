@@ -103,18 +103,17 @@ assign bitIn = pins[refPin];
 assign nextHistory = {history[6:0], bitIn};
 assign nextCount = (count == 4'd15) ? count : count + 1'b1;
 
-// history[k] is the bit seen k ticks ago; the last len bits must equal VALUE sent in the chain's order.
+// history[k] is the bit seen k ticks ago; the last len bits must equal VALUE sent in the chain's order. LSB first the
+// expected history is VALUE reversed and shifted down by 8-len. Fixed indices and shifts only, so no bit is ever out of range.
+logic [7:0] valueReversed;
+logic [7:0] expectHistory;
+
 always_comb begin
-	matchNext = 1'b1;
 	for (int k = 0; k < 8; k++) begin
-		if (k < len) begin
-			if (order) begin
-				if (nextHistory[k] != refValue[k]) matchNext = 1'b0;
-			end else begin
-				if (nextHistory[k] != refValue[len - 1 - k]) matchNext = 1'b0;
-			end
-		end
+		valueReversed[k] = refValue[7 - k];
 	end
+	expectHistory = order ? refValue : (valueReversed >> (4'd8 - len));
+	matchNext = ((nextHistory ^ expectHistory) & lenMask) == 8'd0;
 end
 
 always_ff @(posedge clk or negedge rst_n) begin
