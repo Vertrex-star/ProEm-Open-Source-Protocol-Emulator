@@ -8,12 +8,15 @@ timing. `proem_host.py` builds the instruction bytes and decodes the replies.
 
 | Chip pin | Connect to |
 | --- | --- |
-| `ui[0]` (RX) | Host UART TX: instructions to the chip |
-| `uo[0]` (TX) | Host UART RX: results from the chip |
+| `ui[3]` (RX) | Host UART TX: instructions to the chip |
+| `uo[4]` (TX) | Host UART RX: results from the chip |
 | `uio[0]`, `uio[1]`, `uio[2]` | Channel A: data (TX, MOSI, SDA, D+), pair (D-), clock (SCK, SCL) |
 | `uio[3]`, `uio[4]`, `uio[5]` | Channel B, same order |
-| `uo[4]`, `uo[5]` | HOST_FULL for A and B: pause sending DATA while high |
+| `uo[0]`, `uo[5]` | HOST_FULL for A and B: pause sending DATA while high |
 | `clk`, `rst_n` | 50 MHz clock and reset (from the Tiny Tapeout demo board) |
+
+`ui[3]` and `uo[4]` are the Tiny Tapeout UART pins: on the demo board the RP2040 connects them to
+its USB serial port, so a PC can talk to the chip over the board's USB cable with no extra wiring.
 
 The pins are logic level. USB, CAN, RS-485 and Ethernet need the usual transceiver or line driver.
 
@@ -27,7 +30,7 @@ The pins are logic level. USB, CAN, RS-485 and Ethernet need the usual transceiv
 3. **Queue payload** with `DATA` (1 to 8 bits per entry; the host FIFO holds 8 entries per channel).
 4. **Start** with `RUN`. Plain `RUN` also starts a new frame whenever payload is waiting, which is
    what a transmit stream needs; `RUN READ` and `RUN WRITE` run one transaction each.
-5. **Read the replies** on `uo[0]`: every message is two bytes.
+5. **Read the replies** on `uo[4]`: every message is two bytes.
 
 | First byte | Second byte | Meaning |
 | --- | --- | --- |

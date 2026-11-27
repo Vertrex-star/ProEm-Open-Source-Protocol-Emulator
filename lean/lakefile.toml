@@ -1,0 +1,6 @@
+name = "proem"
+version = "0.1.0"
+defaultTargets = ["ProEm"]
+
+[[lean_lib]]
+name = "ProEm"

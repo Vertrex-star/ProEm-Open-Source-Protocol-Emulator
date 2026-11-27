@@ -59,14 +59,15 @@ programs for sixteen more standards.
 
 A host (an RP2040, or a PC through a USB-UART adapter) drives ProEm over one serial line:
 
-1. Connect the host's TX to `ui[0]` and RX to `uo[0]`. The protocol lines are `uio[0]` to
-   `uio[2]` for channel A and `uio[3]` to `uio[5]` for channel B.
+1. Connect the host's TX to `ui[3]` and RX to `uo[4]`. These are the Tiny Tapeout UART pins, so on
+   the demo board the RP2040 carries the link to its USB serial port with no extra wiring. The
+   protocol lines are `uio[0]` to `uio[2]` for channel A and `uio[3]` to `uio[5]` for channel B.
 2. After reset, send `0x55` once; the chip learns the host's baud rate from it.
 3. Program a channel: line coding, clock, pin drive, and the frame's shape (START, headers,
    MAIN, END). The settings stay until they are rewritten.
 4. Queue the payload with `DATA` and start with `RUN`. Fixed parts of a frame (addresses,
    commands, sync patterns) come from the program; only the payload changes per frame.
-5. Read the results on `uo[0]`: received data, and one status byte per frame.
+5. Read the results on `uo[4]`: received data, and one status byte per frame.
 
 [host/](host/README.md) has a Python library that builds the instruction bytes and decodes the
 replies, with a worked UART transmit example. For example, sending `A0000` at 115200 baud on
@@ -74,7 +75,7 @@ channel A:
 
 ```python
 import proem_host as ph
-first, rest = ph.uart_tx(0, 115200, b"A0000")   # instruction bytes to send to ui[0]
+first, rest = ph.uart_tx(0, 115200, b"A0000")   # instruction bytes to send to ui[3]
 ```
 
 New to the toolchain? [docs/toolchain_guide.pdf](docs/toolchain_guide.pdf) explains YAML, the C++
@@ -150,12 +151,13 @@ needs for a submission.
 
 | Pin | Direction | Use |
 | --- | --- | --- |
-| `ui[0]` | in | RX: instructions from the host (the first byte after reset must be `0x55`) |
-| `ui[7:1]` | in | unused |
-| `uo[0]` | out | TX: data and status to the host |
+| `ui[3]` | in | RX: instructions from the host (the first byte after reset must be `0x55`) |
+| `ui[2:0]`, `ui[7:4]` | in | unused |
+| `uo[0]` | out | HOST_FULL for channel A |
 | `uo[1]` | out | BAUD_LOCKED |
 | `uo[3:2]` | out | ARMED for channels B and A |
-| `uo[5:4]` | out | HOST_FULL for channels B and A |
+| `uo[4]` | out | TX: data and status to the host |
+| `uo[5]` | out | HOST_FULL for channel B |
 | `uo[7:6]` | out | SELECT (chip select) for channels B and A |
 | `uio[0]`, `uio[1]`, `uio[2]` | in/out | pins 0 to 2, driven by channel A: data (TX, MOSI, SDA, D+), pair (D-), clock (SCK, SCL) |
 | `uio[3]`, `uio[4]`, `uio[5]` | in/out | pins 3 to 5, driven by channel B, same order |

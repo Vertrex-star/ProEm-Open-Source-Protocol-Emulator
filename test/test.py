@@ -13,6 +13,8 @@ from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, RisingEdge
 
 INS_R = 8
+RX_PIN = 3  # ui_in[3]: instructions to the chip (Tiny Tapeout UART RX)
+TX_PIN = 4  # uo_out[4]: replies from the chip (Tiny Tapeout UART TX)
 SYNC, ASYNC, GENERATE, RECOVER = 0, 1, 2, 3
 
 
@@ -62,7 +64,7 @@ class Link:
     async def send_byte(self, b):
         bits = [0] + [(b >> i) & 1 for i in range(8)] + [1, 1]
         for level in bits:
-            self.dut.ui_in.value = level
+            self.dut.ui_in.value = level << RX_PIN
             await ClockCycles(self.dut.clk, INS_R)
 
     async def send(self, program):
@@ -79,7 +81,7 @@ class Link:
         while True:
             await RisingEdge(self.dut.clk)
             try:
-                level = int(self.dut.uo_out.value) & 1
+                level = (int(self.dut.uo_out.value) >> TX_PIN) & 1
             except ValueError:
                 continue
             if state == 0:
@@ -125,7 +127,7 @@ class Link:
         for _ in range(limit):
             await RisingEdge(self.dut.clk)
             try:
-                level = int(self.dut.uo_out.value) & 1
+                level = (int(self.dut.uo_out.value) >> TX_PIN) & 1
             except ValueError:
                 level = 1
             idle = idle + 1 if level else 0
@@ -136,7 +138,7 @@ class Link:
 async def power_on(dut):
     cocotb.start_soon(Clock(dut.clk, 20, unit="ns").start())
     dut.ena.value = 1
-    dut.ui_in.value = 1
+    dut.ui_in.value = 1 << RX_PIN
     dut.ext_in.value = 0xFF
     dut.loop_uart.value = 0
     dut.loop_select.value = 0

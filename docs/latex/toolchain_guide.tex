@@ -397,10 +397,10 @@ async def test_uart_loopback(dut):
 \end{lstlisting}
 
 \begin{itemize}
-\item \texttt{dut} (``device under test'') is a handle to \file{tb.v}; \texttt{dut.ui\_in.value = 1} drives a pin, \texttt{dut.uo\_out.value} reads one.
+\item \texttt{dut} (``device under test'') is a handle to \file{tb.v}; \texttt{dut.ui\_in.value = 8} drives the inputs (here \texttt{ui\_in[3]} high), \texttt{dut.uo\_out.value} reads the outputs.
 \item \texttt{async} and \texttt{await} are how cocotb waits for simulated time. \texttt{await ClockCycles(dut.clk, 100)} pauses the Python until 100 clock edges have passed.
 \item \texttt{assert} checks a result; if it is false the test fails and prints the message.
-\item The \texttt{Link} class in \file{test.py} turns calls such as \texttt{link.main(9, 0)} into instruction bytes, sends them bit by bit on \texttt{ui\_in[0]}, and decodes the chip's replies from \texttt{uo\_out[0]} into \texttt{link.got} and \texttt{link.status}.
+\item The \texttt{Link} class in \file{test.py} turns calls such as \texttt{link.main(9, 0)} into instruction bytes, sends them bit by bit on \texttt{ui\_in[3]}, and decodes the chip's replies from \texttt{uo\_out[4]} into \texttt{link.got} and \texttt{link.status}.
 \end{itemize}
 
 \subsection{Running it}
@@ -412,7 +412,7 @@ make -B COCOTB_TEST_FILTER=test_spi_loopback  # one test
 gtkwave tb.fst                                # the waveform
 \end{lstlisting}
 
-\texttt{-B} forces a rebuild, so the latest RTL is always used. The summary line reads \texttt{TESTS=6 PASS=6 FAIL=0}, and \file{results.xml} is what the GitHub \cmd{test} workflow checks. In GTKWave, expand \texttt{tb} and then \texttt{user\_project} to reach the design's hierarchy (\texttt{core}, \texttt{channel\_a}, and so on). \texttt{uo\_out[0]} is the chip's TX line, \texttt{ui\_in[0]} is RX, and \texttt{uio\_out} and \texttt{uio\_oe} are the protocol pins.
+\texttt{-B} forces a rebuild, so the latest RTL is always used. The summary line reads \texttt{TESTS=6 PASS=6 FAIL=0}, and \file{results.xml} is what the GitHub \cmd{test} workflow checks. In GTKWave, expand \texttt{tb} and then \texttt{user\_project} to reach the design's hierarchy (\texttt{core}, \texttt{channel\_a}, and so on). \texttt{uo\_out[4]} is the chip's TX line, \texttt{ui\_in[3]} is RX, and \texttt{uio\_out} and \texttt{uio\_oe} are the protocol pins.
 
 \subsection{Writing a new test}
 
@@ -927,8 +927,8 @@ Every project has the same interface, which is why the top module has exactly th
 \toprule
 Port & Meaning \\
 \midrule
-\texttt{ui\_in[7:0]} & 8 inputs. ProEm uses \texttt{ui\_in[0]} as RX from the host. \\
-\texttt{uo\_out[7:0]} & 8 outputs. ProEm: TX, BAUD\_LOCKED, ARMED, HOST\_FULL, SELECT. \\
+\texttt{ui\_in[7:0]} & 8 inputs. ProEm uses \texttt{ui\_in[3]} as RX from the host, the Tiny Tapeout UART input. \\
+\texttt{uo\_out[7:0]} & 8 outputs. ProEm: TX on \texttt{uo\_out[4]} (the Tiny Tapeout UART output), BAUD\_LOCKED, ARMED, HOST\_FULL, SELECT. \\
 \texttt{uio\_in}, \texttt{uio\_out}, \texttt{uio\_oe} & 8 bidirectional pins. \texttt{uio\_oe[i] = 1} makes pin $i$ an output. ProEm's protocol pins are here, so every line can be driven and read back. \\
 \texttt{clk}, \texttt{rst\_n} & Clock, and reset (active low: 0 means reset). \\
 \texttt{ena} & 1 when this project is the one selected. \\
