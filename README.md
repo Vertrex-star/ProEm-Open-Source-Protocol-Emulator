@@ -101,6 +101,7 @@ sim/                pin-level test bench (bench.h) and the tests (t_*.cpp)
   verilator/        adapter that runs the same tests on Verilator, for coverage
 host/               Python host library (proem_host.py) and how to drive the chip
 formal/             formal proofs (SymbiYosys): harnesses and .sby files
+lean/               Lean 4 proofs of the reference properties, for every size
 lint/               waivers.vlt, the reviewed Verilator warnings
 scripts/            run.sh (all tests + synthesis), lint.sh, coverage.sh, sigrok_check.py,
                     formal.sh (all proofs), synth_ihp.sh (IHP area), sta.sh (timing estimate),
@@ -110,8 +111,9 @@ docs/               every document as a PDF (README.md lists them), info.md (dat
   latex/            the LaTeX source of each PDF (build with scripts/docs.sh)
   images/           architecture diagram and layout picture
   diagram/          diagram generator (make_diagram.py) and its fonts (SIL OFL)
-.github/workflows/  gds (Tiny Tapeout GDS, precheck, gate-level test, viewer), test (cocotb),
-                    docs (datasheet check), sim (every pin-level test, sigrok, lint), formal (every proof)
+.github/workflows/  gds (Tiny Tapeout GDS, precheck, gate-level test, viewer; run by hand), test (cocotb),
+                    docs (datasheet check), sim (every pin-level test, sigrok, lint), formal (every proof),
+                    lean (Lean proofs)
 ```
 
 Module hierarchy:
@@ -231,20 +233,29 @@ Every test resets the chip, sends `0x55` for auto-baud, programs it with instruc
 
 ## Formal proofs
 
-Six modules are proven with [SymbiYosys](https://github.com/YosysHQ/sby), for every possible
-input sequence and with no depth limit: the host FIFO, the frame buffer (including commit and
-rollback), the UART transmitter (for every clocks-per-bit value), the branch unit (against a
-model of the BRANCH rules), the CRC unit (against a bit-by-bit CRC of every width) and the line
-codec's entry accounting and output enables (every configuration left free). Most take
-a few seconds; the CRC proof takes about four minutes. With the
+Sixteen RTL blocks are proven with [SymbiYosys](https://github.com/YosysHQ/sby),
+for every possible input sequence and with no depth limit: the host FIFO, frame buffer, UART
+receiver and transmitter, control unit (against a second decoder written from the ISA), return
+path, entry dispatcher, branch unit, CRC unit, line codec, start router, START, header, MAIN and
+END counters, and the watchdog. Each harness wraps the unchanged RTL with a small reference model,
+mostly written from the ISA rather than the RTL; each proof also has a cover task showing its
+interesting cases are reachable, and mutation testing (`scripts/mutate.py`) checks that planted
+faults make the proofs fail. With the
 [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build) installed:
 
 ```sh
-bash scripts/formal.sh
+bash scripts/formal.sh                # every prove and cover task
+FORMAL_DEEP=1 bash scripts/formal.sh  # adds the wider uart_rx ratios and the return_path line check
 ```
 
 [formal/README.md](formal/README.md) lists what each proof covers, and
-the formal part of [docs/toolchain_guide.pdf](docs/toolchain_guide.pdf) explains the method.
+[docs/verification_report.pdf](docs/verification_report.pdf) explains the method, the assumptions
+each proof relies on, the mutation scores and how far each proof can be trusted.
+
+The [lean/](lean/README.md) folder adds machine-checked Lean 4 proofs of four reference properties
+for every size, not only the chip's: the CRC detects every single-bit error, the return path's
+round robin is fair, MAIN's entries decode back to exactly the bits on the line, and the start
+router runs one block at a time (`cd lean && lake build`).
 
 ## Other checks
 
@@ -255,8 +266,8 @@ python3 scripts/sigrok_check.py       # standards waveforms decoded by sigrok-cl
 PDK_ROOT=path/to/IHP-Open-PDK bash scripts/synth_ihp.sh typ_1p20V_25C   # area and logic depth in CMOS5L cells
 ```
 
-[docs/verification_report.pdf](docs/verification_report.pdf) gives the results and the two
-bugs they found.
+[docs/verification_report.pdf](docs/verification_report.pdf) gives the results, the seven findings of
+the second verification round and how each was resolved.
 
 ## Regenerating the diagram and the PDFs
 
@@ -274,8 +285,8 @@ Known limits are listed in the design reference; the main ones are the return li
 (full-size Ethernet frames overflow and are reported) and the instruction link rate when feeding
 fast fixed-timing lines. Every block has a formal proof except the integration of the frame
 chain, the channel and the chip core, and the line codec's data path; those are covered by
-simulation and sigrok (see the verification report). Still to do: a green `gds` run on GitHub
-(it adds the full KLayout DRC of the precheck) and a test on real hardware.
+simulation and sigrok (see the verification report). The `gds` workflow, its precheck (with the
+full KLayout DRC) and the gate-level test pass on GitHub. Still to do: a test on real hardware.
 
 ## Licence
 
