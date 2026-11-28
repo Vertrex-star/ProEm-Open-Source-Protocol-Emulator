@@ -40,7 +40,7 @@
 \begin{abstract}
 The first edition of this report (17 October) signed off v0.7.1: lint, synthesis, place and route at three corners, gate-level simulation, a second simulator, sigrok, coverage and six formal proofs. Two bugs came out of it, both fixed. This edition widens the formal side. Ten more proofs cover every block that had none: the host UART receiver, the control unit, the return path, the entry dispatcher together with the frame buffer, and every counter of the frame chain. Fifteen of the sixteen proofs are now also put through mutation testing: small faults are planted in the RTL, one at a time, and the proof must catch each one that changes behaviour. That turns ``the proof passes'' into a number for how much it can be trusted. No RTL logic was changed and the layout is untouched; the only change under \sig{src/} is a one- or two-sentence description in each file header. No new bug was found in the logic. Seven observations are flagged in Section~\ref{sec:flags} for a decision, none of which affects a standard in the guide; one of them, about rewriting \sig{LINK} while the return link is busy, was found by mutation testing of an existing proof. The results of the first edition are kept in Part~\ref{part:signoff}.
 
-\textbf{Revised for v0.7.2.} Following these findings, v0.7.2 fixes five of the seven in the RTL; the other two need no change (Section~\ref{sec:fixes}). Every proof was re-run on v0.7.2, the UART transmitter's proof now lets the divider change on any clock, the receiver is proved from 1 clock per bit, and the full pin-level regression passes, with two new checks. The project now uses 8 $\times$ 4 tiles. The \sig{gds} workflow built that layout on 27 November: 26,061 cells at 32.4\,\% utilisation, timing met at every corner with 4.44\,ns of setup slack at the slow corner, DRC, antenna and LVS clean, and the gate-level tests pass on it (figures in \sig{gds/README.md}). The place-and-route results in Part~\ref{part:signoff} are those of v0.7.1 at 6 $\times$ 4.
+\textbf{Revised for v0.7.2.} Following these findings, v0.7.2 fixes five of the seven in the RTL; the other two need no change (Section~\ref{sec:fixes}). Every proof was re-run on v0.7.2, the UART transmitter's proof now lets the divider change on any clock, the receiver is proved from 1 clock per bit, and the full pin-level regression passes, with two new checks. The project now uses 8 $\times$ 4 tiles. The \sig{gds} workflow built that layout on 27 November, and rebuilt it the same day after the host UART moved to the Tiny Tapeout UART pins: 26,069 cells at 32.4\,\% utilisation, timing met at every corner with 4.76\,ns of setup slack at the slow corner, DRC, antenna and LVS clean, and the gate-level tests pass on it (figures in \sig{gds/README.md}). The place-and-route results in Part~\ref{part:signoff} are those of v0.7.1 at 6 $\times$ 4.
 \end{abstract}
 
 \section{Summary}
@@ -58,7 +58,7 @@ Gate level & cocotb suite on the v0.7.2 RTL (6/6); the gate-level run on the 8 $
 Mutation testing & 211 planted faults over fifteen proofs, 186 of 203 behaviour-changing ones killed, every survivor reviewed (\sig{scripts/mutate.py}, Section~\ref{sec:mutation}; the CRC unit not completed) & 91.6\,\% killed \\
 Regression & Full \sig{scripts/run.sh} and lint on v0.7.2, with auto-baud at 1 clock per bit and the new \sig{cmd\_error} checks added & \pass \\
 Findings & Seven observations (Section~\ref{sec:flags}); five fixed in v0.7.2, two need no change & \fixed \\
-Layout & 8 $\times$ 4 tiles, built by the \sig{gds} workflow: timing met at all three corners (4.44\,ns slow-corner setup slack), DRC, antenna and LVS clean, gate-level tests pass & \pass \\
+Layout & 8 $\times$ 4 tiles, built by the \sig{gds} workflow: timing met at all three corners (4.76\,ns slow-corner setup slack), DRC, antenna and LVS clean, gate-level tests pass; rebuilt after the host UART moved to the Tiny Tapeout UART pins & \pass \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -218,7 +218,7 @@ These were found on v0.7.1, with the RTL frozen, and recorded for a decision. No
 
 \section{Corrections in v0.7.2}\label{sec:fixes}
 
-Five of the seven findings are fixed in the RTL. Each fix is local, adds no instruction or field, and leaves every program the host library builds unchanged; together they add 34 cells after synthesis (19,003). The other two need no change: item 2 is safe by a proved property of \sig{uart\_rx}, and item 5 cannot happen in the chain.
+Five of the seven findings are fixed in the RTL. Each fix is local, adds no instruction or field, and leaves every program the host library builds unchanged; together they add 34 cells in a stand-alone Yosys synthesis (19,003 there; the Tiny Tapeout flow counts 19,417, including its tie cells). The other two need no change: item 2 is safe by a proved property of \sig{uart\_rx}, and item 5 cannot happen in the chain.
 
 \begin{center}\small
 \begin{tabularx}{\linewidth}{@{}l L L@{}}
