@@ -8,8 +8,10 @@
 
 name: gds
 
+# Manual only: the full build takes about two hours of Actions time, so it no longer runs on every push.
+# Run it from the Actions tab (gds, Run workflow) before submitting: Tiny Tapeout needs a passing run on
+# the commit that is submitted.
 on:
-  push:
   workflow_dispatch:
 
 jobs:

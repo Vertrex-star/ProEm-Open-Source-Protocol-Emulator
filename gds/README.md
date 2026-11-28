@@ -12,14 +12,16 @@ relates to the Jane Street protocol emulator challenge, and its power and perfor
 ## Current state: 8 x 4 tiles, ISA v0.7.2
 
 This is the layout of ISA v0.7.2 on **8 x 4 tiles**, built by the `gds` GitHub workflow on
-27 November 2026 (commit `ae707b7`, 2 h 13 min) with the Tiny Tapeout CMOS5L flow (LibreLane
+27 November 2026 (commit `9296536`) with the Tiny Tapeout CMOS5L flow (LibreLane
 3.1.0.dev3, IHP-Open-PDK) on IHP SG13CMOS5L 130 nm at 50 MHz. Timing is met at all three corners,
 routing, DRC, antenna and LVS are clean, and the gate-level cocotb tests pass on the routed
 netlist. The chip has not been fabricated yet.
 
 v0.7.2 is v0.7.1 plus the five corrections from the second verification round (range checks on
 START, HDR and END lengths, a LINK divider taken per byte, auto-baud from 1 clock per bit, abort
-winning over complete, and a branch abort keeping MAIN's last finished byte).
+winning over complete, and a branch abort keeping MAIN's last finished byte). This build also has the
+host UART on the Tiny Tapeout UART pins (RX on `ui_in[3]`, TX on `uo_out[4]`), which the demo
+board's RP2040 connects to its USB serial port; the logic is unchanged, only the pin map moved.
 
 | | 8 x 4, v0.7.2 (27 November) | 6 x 4, v0.7.1 (14 October) |
 | --- | --- | --- |
@@ -27,30 +29,30 @@ winning over complete, and a branch abort keeping MAIN's last finished byte).
 | Process | IHP SG13CMOS5L 130 nm (Metal1 to Metal4 plus TopMetal1) | same |
 | Die | 1724.16 x 710.64 um = 1,225,260 um² | 1289.28 x 710.64 um = 916,214 um² |
 | Core (area available for cells) | 1,208,170 um² | 902,417 um² |
-| Cells after synthesis | 19,003 | 18,969 |
-| Cells after place and route | 26,061, not counting 76,186 fill cells | 25,612 |
+| Cells after synthesis | 19,417 (the flow's count) | 18,969 (a separate count, not like for like) |
+| Cells after place and route | 26,069, not counting 76,327 fill cells | 25,612 |
 | Utilisation | 32.4 % | 43 % |
-| Clock | 50 MHz; met at every corner, 4.44 ns to spare at the slow corner | 50 MHz; met at every corner, 3.84 ns to spare |
-| Power | 10.4 mW (typical corner) | 10.2 mW |
-| Routing | 0 DRC violations after 5 iterations, 0 antenna violations (33 diodes), 0.995 m of wire | 0 violations, 1.15 m of wire |
+| Clock | 50 MHz; met at every corner, 4.76 ns to spare at the slow corner | 50 MHz; met at every corner, 3.84 ns to spare |
+| Power | 10.5 mW (typical corner) | 10.2 mW |
+| Routing | 0 DRC violations after 6 iterations, 0 antenna violations (46 diodes), 1.01 m of wire | 0 violations, 1.15 m of wire |
 | Checks | Magic DRC 0 errors, LVS clean, gate-level tests pass | Magic DRC 0 errors, LVS clean, precheck passed locally |
 
-With a third more area the same logic spreads out more easily: the router needs 14 % less wire,
-and the slow-corner margin grows from 3.84 ns to 4.44 ns.
+With a third more area the same logic spreads out more easily: the router needs 12 % less wire,
+and the slow-corner margin grows from 3.84 ns to 4.76 ns.
 
 Where the cell area went (8 x 4, v0.7.2):
 
 | Cell class | Count | Area (um²) | Share |
 | --- | ---: | ---: | ---: |
 | Flip-flops | 2,785 | 136,434 | 35 % |
-| Combinational logic | 15,765 | 163,047 | 42 % |
-| Timing repair buffers (most of them fix hold time) | 6,175 | 79,309 | 20 % |
-| Clock tree | 416 | 7,918 | 2 % |
-| Inverters, buffers, antenna diodes | 920 | 5,048 | 1 % |
-| **Total** | **26,061** | **391,756** | **100 %** |
+| Combinational logic | 15,765 | 163,055 | 42 % |
+| Timing repair buffers (most of them fix hold time) | 6,185 | 79,264 | 20 % |
+| Clock tree | 408 | 7,907 | 2 % |
+| Inverters, buffers, antenna diodes | 926 | 5,080 | 1 % |
+| **Total** | **26,069** | **391,740** | **100 %** |
 
-The flow also reports max-slew warnings (205 pins at the typical corner, 1,010 at the slow corner,
-worst 1.68 ns against a 0.75 ns limit) and 203 max-fanout warnings. They are design-rule warnings,
+The flow also reports max-slew warnings (163 pins at the typical corner, 1,081 at the slow corner)
+and 202 max-fanout warnings. They are design-rule warnings,
 not timing failures: timing analysis already includes the slow transitions and is met at every
 corner, and the flow passes. The pins are on high-fanout nets, driven by the buffers the flow adds
 to split fanout. The first edition did not record these counts for v0.7.1, so there is no
@@ -95,9 +97,9 @@ Estimated by OpenROAD on the routed 8 x 4 layout, with extracted wiring, at 50 M
 
 | Corner | Flip-flops | Logic | Clock tree | Total |
 | --- | ---: | ---: | ---: | ---: |
-| Typical: 1.20 V, 25 °C | 7.50 mW | 0.29 mW | 2.64 mW | **10.4 mW** |
-| Slow: 1.08 V, 125 °C | 5.98 mW | 0.24 mW | 2.03 mW | 8.3 mW |
-| Fast: 1.32 V, -40 °C | 9.13 mW | 0.38 mW | 3.49 mW | 13.0 mW |
+| Typical: 1.20 V, 25 °C | 7.50 mW | 0.31 mW | 2.66 mW | **10.5 mW** |
+| Slow: 1.08 V, 125 °C | 5.98 mW | 0.25 mW | 2.04 mW | 8.3 mW |
+| Fast: 1.32 V, -40 °C | 9.13 mW | 0.39 mW | 3.51 mW | 13.0 mW |
 
 * About 8.7 mA from the 1.2 V core supply; leakage is about 0.05 mW.
 * About 97 % of the power is the clock reaching the flip-flops; the logic itself uses about 3 %.
@@ -111,9 +113,9 @@ Timing after routing of the 8 x 4 layout, at a 50 MHz (20 ns) clock.
 
 | Corner | Setup slack | Hold slack | Maximum clock |
 | --- | ---: | ---: | ---: |
-| Typical: 1.20 V, 25 °C | 10.2 ns | 0.27 ns | 102 MHz |
-| Slow: 1.08 V, 125 °C | 4.44 ns | 0.59 ns | 64 MHz |
-| Fast: 1.32 V, -40 °C | 12.8 ns | 0.10 ns | 138 MHz |
+| Typical: 1.20 V, 25 °C | 10.4 ns | 0.26 ns | 104 MHz |
+| Slow: 1.08 V, 125 °C | 4.76 ns | 0.59 ns | 66 MHz |
+| Fast: 1.32 V, -40 °C | 12.9 ns | 0.07 ns | 140 MHz |
 
 The CMOS5L flow only enforces the typical corner; this layout meets all three. v0.7.1 on 6 x 4
 had 9.8, 3.8 and 12.4 ns of setup slack. How the slow corner was first closed is described in

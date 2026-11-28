@@ -26,8 +26,8 @@ Top module for Tiny Tapeout: `tt_um_vertrex_star_proem`.
 | Reacting on chip | `BRANCH` rules change a frame's direction, or abort it, from a field just received or from the line not reading back what the chip drove |
 | CRC and reply on chip | Any CRC of 1 to 16 bits, checked on receive or appended on transmit; a fixed reply (USB ACK, CAN ACK slot) sent a set number of bits after a good or bad frame |
 | Long packets | `DATA` streams while a frame runs; fixed-timing lines report an underrun if the data runs out |
-| Logic | 19,003 cells after synthesis, 26,061 after place and route (32.4 % of the 8 × 4 core area) |
-| Timing | Met after routing at all three corners on CMOS5L: 4.44 ns setup slack at 1.08 V, 125 °C (up to 64 MHz) |
+| Logic | 19,417 cells after synthesis, 26,069 after place and route (32.4 % of the 8 × 4 core area) |
+| Timing | Met after routing at all three corners on CMOS5L: 4.76 ns setup slack at 1.08 V, 125 °C (up to 66 MHz) |
 | Instruction set | ISA v0.7.2, see [docs/protocol_emulator_isa.pdf](docs/protocol_emulator_isa.pdf) |
 
 ## How it works
@@ -173,23 +173,23 @@ lines (I2C, USB) work on a single pad. A channel only drives its pads when `OUT`
 The GDS file, pictures of the layout and a summary of space, power and performance are in [gds/](gds/README.md).
 
 From v0.7.2 the project uses **8 × 4 tiles** (1724.16 × 710.64 µm, set in `info.yaml`). The
-layout was built by the `gds` workflow on 27 November 2026 with the Tiny Tapeout CMOS5L flow
+layout was built by the `gds` workflow on 27 November 2026, after the host UART moved to the Tiny Tapeout UART pins, with the Tiny Tapeout CMOS5L flow
 (LibreLane 3.1.0.dev3, IHP-Open-PDK); the GDS, LEF and pictures are in [gds/](gds/README.md).
 
 | | 8 × 4, v0.7.2 (27 November) | 6 × 4, v0.7.1 (14 October) |
 | --- | --- | --- |
 | Die | 1724.16 × 710.64 µm (1,225,260 µm²) | 1289.28 × 710.64 µm (916,214 µm²) |
-| Cells after synthesis | 19,003 | 18,969 |
-| Cells after place and route | 26,061, not counting fill | 25,612 |
+| Cells after synthesis | 19,417 (the flow's count) | 18,969 (a separate count, not like for like) |
+| Cells after place and route | 26,069, not counting fill | 25,612 |
 | Utilisation | 32.4 % | 43 % |
-| Setup slack at 50 MHz | 10.2 ns typical, 4.44 ns slow, 12.8 ns fast | 9.8, 3.8, 12.4 ns |
-| Hold slack | 0.27 ns typical, 0.59 ns slow, 0.10 ns fast | 0.29, 0.61, 0.10 ns |
-| Power at 50 MHz | 10.4 mW typical | 10.2 mW |
-| Routing | 0 DRC and antenna violations, 0.995 m of wire | 0 violations, 1.15 m |
+| Setup slack at 50 MHz | 10.4 ns typical, 4.76 ns slow, 12.9 ns fast | 9.8, 3.8, 12.4 ns |
+| Hold slack | 0.26 ns typical, 0.59 ns slow, 0.07 ns fast | 0.29, 0.61, 0.10 ns |
+| Power at 50 MHz | 10.5 mW typical | 10.2 mW |
+| Routing | 0 DRC and antenna violations, 1.01 m of wire | 0 violations, 1.15 m |
 | Sign-off | Magic DRC 0 errors, LVS clean, gate-level tests pass | same |
 
-The 8 × 4 die gives the same logic a third more room: the router needs 14 % less wire and the
-slow-corner margin grows from 3.84 ns to 4.44 ns. The v0.7.2 changes add 34 cells. The slow-corner
+The 8 × 4 die gives the same logic a third more room: the router needs 12 % less wire and the
+slow-corner margin grows from 3.84 ns to 4.76 ns. The slow-corner
 timing work of v0.7.1 (a registered CRC input, a faster CRC update, registered FIFO and buffer
 state, and setup repair after global routing in `src/config.json`) is kept, and is described in
 [docs/verification_report.pdf](docs/verification_report.pdf).

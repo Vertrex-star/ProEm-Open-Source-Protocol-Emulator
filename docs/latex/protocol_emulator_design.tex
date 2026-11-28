@@ -47,8 +47,8 @@ System clock & 50\,MHz (10BASE-T transmit needs 40 or 60\,MHz) \\
 Channels & 2 independent protocol channels, A and B \\
 Host link & UART in (auto-baud), UART out (rate set by \sig{LINK}) \\
 Standards verified & UART, SPI (controller in all four modes, and target), I\textsuperscript{2}C (controller and target), PS/2, 10BASE-T receive, Manchester transmit, USB low speed receive and transmit with CRC and handshake, SWD-style acknowledge handling, CAN with bit stuffing, arbitration, CRC-15 and acknowledge, and 16 more in the \emph{Standards Programming Guide} (RS-485 to RC5 infrared) \\
-Logic & 19,003 cells after synthesis, 26,061 after place and route (32.4\,\% of the core) \\
-Timing & met at all three corners after routing; 4.44\,ns setup slack at 1.08\,V, 125\,$^\circ$C (64\,MHz) \\
+Logic & 19,417 cells after synthesis, 26,069 after place and route (32.4\,\% of the core) \\
+Timing & met at all three corners after routing; 4.76\,ns setup slack at 1.08\,V, 125\,$^\circ$C (66\,MHz) \\
 Instruction set & ISA v0.7.2 (separate document: \emph{ProEm Instruction Set}) \\
 \bottomrule
 \end{tabularx}
@@ -427,7 +427,7 @@ Flattened, as \sig{scripts/synth\_ihp.sh} does it, the design is 19,721 cells an
 
 \subsection{Place and route on Tiny Tapeout}
 
-From v0.7.2 the project uses 8 $\times$ 4 tiles (\sig{info.yaml}), the size the Jane Street challenge's updated rules allow (the original brief set 6 $\times$ 4). The layout was built by the \sig{gds} workflow on 27 November 2026 with the Tiny Tapeout CMOS5L flow: LibreLane 3.1.0.dev3 and the IHP SG13CMOS5L PDK. The routed 6 $\times$ 4 layout of v0.7.1 is given for comparison.
+From v0.7.2 the project uses 8 $\times$ 4 tiles (\sig{info.yaml}), the size the Jane Street challenge's updated rules allow (the original brief set 6 $\times$ 4). The layout was built by the \sig{gds} workflow on 27 November 2026, after the host UART moved to the Tiny Tapeout UART pins, with the Tiny Tapeout CMOS5L flow: LibreLane 3.1.0.dev3 and the IHP SG13CMOS5L PDK. The routed 6 $\times$ 4 layout of v0.7.1 is given for comparison.
 
 \begin{center}
 \begin{tabular}{@{}lll@{}}
@@ -436,12 +436,12 @@ From v0.7.2 the project uses 8 $\times$ 4 tiles (\sig{info.yaml}), the size the 
 \midrule
 Die & 1724.16 $\times$ 710.64\,$\mu$m & 1289.28 $\times$ 710.64\,$\mu$m \\
 Core area & 1,208,170\,$\mu$m$^2$ & 902,417\,$\mu$m$^2$ \\
-Cells after synthesis & 19,003 & 18,969 \\
-Cells after place and route & 26,061, not counting fill & 25,612 \\
- & (2,785 flip-flops, 6,175 repair buffers, & (2,763, 6,104, 362) \\
- & 416 clock tree cells) & \\
+Cells after synthesis & 19,417 (flow count) & 18,969 (separate count) \\
+Cells after place and route & 26,069, not counting fill & 25,612 \\
+ & (2,785 flip-flops, 6,185 repair buffers, & (2,763, 6,104, 362) \\
+ & 408 clock tree cells) & \\
 Utilisation & 32.4\,\% & 43\,\% \\
-Wire & 0.995\,m & 1.15\,m \\
+Wire & 1.01\,m & 1.15\,m \\
 Routing and sign-off & 0 routing and antenna violations; DRC 0 errors; LVS clean & same \\
 \bottomrule
 \end{tabular}
@@ -454,14 +454,14 @@ Timing and power of the routed 8 $\times$ 4 layout, with extracted parasitics:
 \toprule
 Corner & Setup slack & Hold slack & Highest clock & Power \\
 \midrule
-Typical, 1.20\,V, 25\,$^\circ$C & 10.2\,ns & 0.27\,ns & 102\,MHz & 10.4\,mW \\
-Slow, 1.08\,V, 125\,$^\circ$C & 4.44\,ns & 0.59\,ns & 64\,MHz & 8.3\,mW \\
-Fast, 1.32\,V, $-$40\,$^\circ$C & 12.8\,ns & 0.10\,ns & 138\,MHz & 13.0\,mW \\
+Typical, 1.20\,V, 25\,$^\circ$C & 10.4\,ns & 0.26\,ns & 104\,MHz & 10.5\,mW \\
+Slow, 1.08\,V, 125\,$^\circ$C & 4.76\,ns & 0.59\,ns & 66\,MHz & 8.3\,mW \\
+Fast, 1.32\,V, $-$40\,$^\circ$C & 12.9\,ns & 0.07\,ns & 140\,MHz & 13.0\,mW \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-The flow also reports max-slew warnings on high-fanout nets (205 pins at the typical corner, 1,010 at the slow corner); timing analysis includes those transitions and is met at every corner.
+The flow also reports max-slew warnings on high-fanout nets (163 pins at the typical corner, 1,081 at the slow corner); timing analysis includes those transitions and is met at every corner.
 
 For comparison, timing and power of the routed 6 $\times$ 4 layout of v0.7.1, with extracted parasitics:
 

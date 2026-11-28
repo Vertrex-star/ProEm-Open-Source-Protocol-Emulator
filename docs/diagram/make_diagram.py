@@ -166,16 +166,16 @@ T(60,1744,"plus 16 more standards, receive and transmit: RS-232/422/485 · MIDI 
 T(60,1768,"and 1,800 random programs, 600 random branch programs, 60 random CRCs chip to chip, SWD-style acknowledge, streaming and underrun, control tests: auto-baud, HALT, CLEAR, LINK, watchdog, error flags",15,C["muted"],anchor="start")
 
 T(60,1806,"Where the logic cells go",28,w=700,anchor="start",fam="disp")
-T(372,1806,"IHP cells per block (hierarchical synthesis, 19,145 in all) · routed layout: 26,061 cells with repair buffers and clock tree, 32.4 % of the 8 × 4 core · timing met at every corner",16,C["muted"],anchor="start")
+T(372,1806,"IHP cells per block (hierarchical synthesis, 19,145 in all) · routed layout: 26,069 cells with repair buffers and clock tree, 32.4 % of the 8 × 4 core · timing met at every corner",16,C["muted"],anchor="start")
 parts=[("Chain A",5907,C["rx"]),("CRC A",846,"#0E5A55"),("Codec A",1597,C["cd"]),("Host FIFO A",319,C["tx"]),("Chain B",5907,"#3E9C95"),("CRC B",846,"#2C7A74"),("Codec B",1597,"#6F8FC0"),("Host FIFO B",319,"#D98A5C"),
-       ("Control unit",961,C["cf"]),("UART RX",434,"#9A90D0"),("Return path",324,C["gold"]),("Repair + clock tree",6916,"#B9C4C1")]
-x0,y0,wt=60,1826,2680; total=26061/0.324255  # cells that would fill the 8 x 4 core at the routed density
+       ("Control unit",961,C["cf"]),("UART RX",434,"#9A90D0"),("Return path",324,C["gold"]),("Repair + clock tree",6924,"#B9C4C1")]
+x0,y0,wt=60,1826,2680; total=26069/0.324242  # cells that would fill the 8 x 4 core at the routed density
 rect(x0,y0,wt,46,"#E6ECEA",C["rule"],r=6)
 x=x0
 for name,v,c in parts:
     w=wt*v/total
     A(f'<rect x="{x:.1f}" y="{y0}" width="{w:.1f}" height="46" fill="{c}"/>'); x+=w
-T(x+18,y0+30,f"free ≈ {100-100*26061/total:.0f} % of the core area",16,C["muted"],anchor="start",w=500)
+T(x+18,y0+30,f"free ≈ {100-100*26069/total:.0f} % of the core area",16,C["muted"],anchor="start",w=500)
 T(x0+wt-12,y0+30,"8 × 4 tiles",15,C["muted"],anchor="end",w=500)
 for i,(name,v,c) in enumerate(parts):
     xx=x0+i*224; yy=y0+80
